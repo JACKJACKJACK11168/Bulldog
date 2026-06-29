@@ -68,7 +68,7 @@
     </style>
 </head>
 <body>
-    <div id="info">🐶 小八的家 (8m×10m) | 半透明占位模式</div>
+    <div id="info">🐶 小八的家 | 卧室 · 客厅 · 厨房 · 卫生间</div>
     <div id="interact-hint">按 <kbd>E</kbd> 互动</div>
     <div id="action-feedback"></div>
     <div id="controls-hint">WASD 移动 · 鼠标拖动视角 · 滚轮缩放</div>
@@ -126,317 +126,74 @@
         backLight.position.set(0, 2, -3);
         scene.add(backLight);
 
-        // ==================== 地面 (8m x 10m) ====================
-        const floorGeo = new THREE.PlaneGeometry(8, 10);
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0xC4956A, roughness: 0.6, metalness: 0.05 });
-        const floor = new THREE.Mesh(floorGeo, floorMat);
-        floor.rotation.x = -Math.PI / 2;
-        floor.position.y = -0.01;
-        floor.receiveShadow = true;
-        scene.add(floor);
 
-        // 地板纹理线
-        for (let i = -3.5; i <= 3.5; i += 1) {
-            const lineGeo = new THREE.BoxGeometry(0.03, 0.005, 9);
-            const lineMat = new THREE.MeshStandardMaterial({ color: 0xA0784C });
-            const line = new THREE.Mesh(lineGeo, lineMat);
-            line.position.set(i, 0, 0);
-            line.receiveShadow = true;
-            scene.add(line);
-        }
-        for (let i = -4.5; i <= 4.5; i += 1) {
-            const lineGeo2 = new THREE.BoxGeometry(7, 0.005, 0.03);
-            const lineMat = new THREE.MeshStandardMaterial({ color: 0xA0784C });
-            const line2 = new THREE.Mesh(lineGeo2, lineMat);
-            line2.position.set(0, 0, i);
-            line2.receiveShadow = true;
-            scene.add(line2);
-        }
+        // ==================== GLTF加载器 (共用) ====================
+        const gltfLoader = new GLTFLoader();
 
-        // ==================== 墙壁 (8m x 10m 房间) ====================
-        function createWall(w, h, d, color, x, y, z, ry = 0) {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-            const wall = new THREE.Mesh(geo, mat);
-            wall.position.set(x, y, z);
-            wall.rotation.y = ry;
-            wall.castShadow = true;
-            wall.receiveShadow = true;
-            scene.add(wall);
-            return wall;
-        }
-
-        // 后墙 (z = -4.5)
-        createWall(8, 2.8, 0.2, 0xf5ead5, 0, 1.4, -4.5);
-        // 左墙 (x = -3.5)
-        createWall(0.2, 2.8, 9, 0xf5ead5, -3.5, 1.4, 0);
-        // 右墙 (x = 3.5, 留门洞)
-        createWall(0.2, 2.8, 3.5, 0xf5ead5, 3.5, 1.4, -2.25);
-        createWall(0.2, 2.8, 3.5, 0xf5ead5, 3.5, 1.4, 2.75);
-        // 前墙 (z = 4.5, 留窗户)
-        createWall(2.5, 2.8, 0.2, 0xf5ead5, -1.5, 1.4, 4.5);
-        createWall(2.5, 2.8, 0.2, 0xf5ead5, 2, 1.4, 4.5);
-
-        // 窗户框
-        function createWindowFrame(x, y, z, rx = 0) {
-            const g = new THREE.Group();
-            const fm = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.3 });
-            const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.0, 0.06), fm);
-            f1.position.set(0, 0, 0);
-            g.add(f1);
-            const f2 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.06), fm);
-            f2.position.set(0, 0.47, 0);
-            g.add(f2);
-            const f3 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.06, 0.06), fm);
-            f3.position.set(0, -0.47, 0);
-            g.add(f3);
-            const f4 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.06), fm);
-            f4.position.set(0, 0.23, 0);
-            g.add(f4);
-            const f5 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.3, 0.06), fm);
-            f5.position.set(0, -0.23, 0);
-            g.add(f5);
-            g.position.set(x, y, z);
-            g.rotation.x = rx;
-            scene.add(g);
-        }
-        createWindowFrame(0, 1.4, 4.45);
-
-        // ==================== 占位家具系统 ====================
-
-        // 辅助函数：创建半透明占位方块
-        function createPlaceholder(w, h, d, colorHex, x, y, z, opacity = 0.6, label = '') {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mat = new THREE.MeshStandardMaterial({
-                color: new THREE.Color(colorHex),
-                roughness: 0.5,
-                transparent: true,
-                opacity: opacity,
-                depthWrite: false
+        // 辅助函数：加载房间模型
+        function loadRoom(filename, scale, posX, posZ, rotY, label) {
+            gltfLoader.load(filename, (gltf) => {
+                const room = gltf.scene;
+                room.scale.set(scale, scale, scale);
+                room.position.set(posX, 0, posZ);
+                room.rotation.y = rotY;
+                room.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                scene.add(room);
+                console.log(`✅ ${label} 加载成功！`);
+            }, undefined, (error) => {
+                console.error(`❌ ${label} 加载失败:`, error);
             });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(x, y, z);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            scene.add(mesh);
-            console.log(`📦 占位: ${label} → (${x}, ${y}, ${z}) [${w}x${h}x${d}] ${colorHex}`);
-            return mesh;
         }
 
-        // ---- 1. 客厅区 (中央偏左) ----
+        // 加载四个房间，墙朝外拼接成大正方形
+        // 每个房间是L型（两面墙），旋转使墙朝外
+        // 卧室(左上)：墙朝左+上  → 旋转0°
+        // 客厅(右上)：墙朝右+上  → 旋转90°
+        // 厨房(左下)：墙朝左+下  → 旋转-90°
+        // 卫生间(右下)：墙朝右+下 → 旋转180°
+        const roomSpacing = 2.2;
+        loadRoom('bedroom.glb',   0.5, -roomSpacing, -roomSpacing, 0,              '卧室');
+        loadRoom('livingroom.glb', 0.5,  roomSpacing, -roomSpacing, -Math.PI/2,    '客厅');
+        loadRoom('kitchen.glb',   0.5, -roomSpacing,  roomSpacing, Math.PI/2,      '厨房');
+        loadRoom('bathroom.glb',  0.5,  roomSpacing,  roomSpacing, Math.PI,       '卫生间');
 
-        // 沙发底座
-        createPlaceholder(2.0, 0.4, 0.8, '#E8D5B7', -0.5, 0.2, 2.2, 0.6, '沙发底座');
-        // 沙发靠背
-        createPlaceholder(2.0, 0.4, 0.15, '#D4C4A3', -0.5, 0.6, 1.85, 0.55, '沙发靠背');
-        // 沙发左扶手
-        createPlaceholder(0.18, 0.4, 0.8, '#D4C4A3', -1.41, 0.35, 2.2, 0.55, '沙发左扶手');
-        // 沙发右扶手
-        createPlaceholder(0.18, 0.4, 0.8, '#D4C4A3', 0.41, 0.35, 2.2, 0.55, '沙发右扶手');
-
-        // 茶几
-        createPlaceholder(1.2, 0.1, 0.6, '#8B6B4D', 0.5, 0.35, 1.8, 0.6, '茶几');
-
-        // 电视柜
-        createPlaceholder(1.6, 0.4, 0.4, '#4A4A4A', -2.0, 0.2, -3.0, 0.55, '电视柜');
-
-        // 电视机身 (黑色)
-        createPlaceholder(0.8, 0.5, 0.05, '#1a1a1a', -2.0, 0.65, -2.75, 0.6, '电视');
-        // 电视屏幕 (发光蓝)
-        const tvScreen2 = new THREE.Mesh(
-            new THREE.BoxGeometry(0.65, 0.38, 0.02),
-            new THREE.MeshStandardMaterial({
-                color: 0x3498DB,
-                emissive: 0x2980B9,
-                emissiveIntensity: 0.6,
-                transparent: true,
-                opacity: 0.7
-            })
-        );
-        tvScreen2.position.set(-2.0, 0.65, -2.72);
-        scene.add(tvScreen2);
-
-        // ---- 2. 厨房区 (右上角) ----
-
-        // L型橱柜 - 第一段 (沿Z方向)
-        createPlaceholder(1.5, 0.8, 0.6, '#F0F0F0', 2.5, 0.4, -1.5, 0.55, '橱柜1');
-        // L型橱柜 - 第二段 (沿X方向)
-        createPlaceholder(0.6, 0.8, 1.5, '#F0F0F0', 1.5, 0.4, -2.5, 0.55, '橱柜2');
-
-        // 狗粮碗 (橙色)
-        createPlaceholder(0.3, 0.1, 0.3, '#E67E22', 2.8, 0.05, -1.8, 0.6, '狗粮碗');
-        // 狗粮颗粒 (小圆球)
-        for (let i = 0; i < 6; i++) {
-            const foodG = new THREE.SphereGeometry(0.03, 6, 4);
-            const foodM = new THREE.MeshStandardMaterial({ color: 0x6D4C41, roughness: 0.6 });
-            const food = new THREE.Mesh(foodG, foodM);
-            food.position.set(
-                2.8 + (Math.random() - 0.5) * 0.15,
-                0.12,
-                -1.8 + (Math.random() - 0.5) * 0.15
-            );
-            food.castShadow = true;
-            scene.add(food);
-        }
-
-        // 水碗 (蓝色)
-        createPlaceholder(0.25, 0.08, 0.25, '#3498DB', 2.8, 0.05, -2.2, 0.6, '水碗');
-
-        // ---- 3. 休息区 (右下角，靠窗) ----
-
-        // 狗窝底座 (红色)
-        createPlaceholder(0.8, 0.1, 0.8, '#E74C3C', -2.2, 0.05, -3.2, 0.55, '狗窝');
-        // 狗窝圆环边缘
-        const bedEdgeG = new THREE.TorusGeometry(0.38, 0.05, 8, 16);
-        const bedEdgeM = new THREE.MeshStandardMaterial({
-            color: 0xC0392B,
-            roughness: 0.6,
-            transparent: true,
-            opacity: 0.55
-        });
-        const bedEdge = new THREE.Mesh(bedEdgeG, bedEdgeM);
-        bedEdge.position.set(-2.2, 0.1, -3.2);
-        bedEdge.rotation.x = Math.PI / 2;
-        bedEdge.castShadow = true;
-        scene.add(bedEdge);
-
-        // 玩具球 (黄色小球)
-        const ballG = new THREE.SphereGeometry(0.08, 12, 8);
-        const ballM = new THREE.MeshStandardMaterial({ color: 0xF1C40F, roughness: 0.4, transparent: true, opacity: 0.65 });
-        const ball = new THREE.Mesh(ballG, ballM);
-        ball.position.set(-1.8, 0.08, -3.5);
-        ball.castShadow = true;
-        scene.add(ball);
-
-        // ---- 4. 记忆走廊 (左侧墙面) ----
-
-        // 旧照片 (金色画框)
-        createPlaceholder(0.3, 0.2, 0.02, '#F39C12', -3.45, 1.5, 0, 0.6, '旧照片');
-
-        // 狗绳 (小圆柱)
-        const leashG = new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8);
-        const leashM = new THREE.MeshStandardMaterial({
-            color: 0x8B4513,
-            roughness: 0.5,
-            transparent: true,
-            opacity: 0.6
-        });
-        const leash = new THREE.Mesh(leashG, leashM);
-        leash.position.set(-3.4, 1.0, -0.5);
-        leash.castShadow = true;
-        scene.add(leash);
-
-        // 旧外套 (扁平盒子)
-        createPlaceholder(0.35, 0.5, 0.04, '#2C3E50', -3.42, 0.8, -1.5, 0.55, '旧外套');
-
-        // ---- 5. 主人NPC (简化人形) ----
-        const ownerGroup = new THREE.Group();
-
-        // 身体
-        const ownerBody = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.25, 0.3, 0.6, 8),
-            new THREE.MeshStandardMaterial({ color: 0x2C3E50, roughness: 0.6, transparent: true, opacity: 0.6 })
-        );
-        ownerBody.position.y = 0.3;
-        ownerBody.castShadow = true;
-        ownerGroup.add(ownerBody);
-
-        // 头
-        const ownerHead = new THREE.Mesh(
-            new THREE.SphereGeometry(0.16, 8, 8),
-            new THREE.MeshStandardMaterial({ color: 0xFAD7A1, roughness: 0.6, transparent: true, opacity: 0.6 })
-        );
-        ownerHead.position.y = 0.7;
-        ownerHead.castShadow = true;
-        ownerGroup.add(ownerHead);
-
-        // 手臂
-        for (let s = -1; s <= 1; s += 2) {
-            const arm = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.04, 0.05, 0.35, 8),
-                new THREE.MeshStandardMaterial({ color: 0xFAD7A1, roughness: 0.6, transparent: true, opacity: 0.6 })
-            );
-            arm.position.set(s * 0.28, 0.38, 0);
-            arm.rotation.z = s * 0.25;
-            arm.castShadow = true;
-            ownerGroup.add(arm);
-        }
-
-        // 腿
-        for (let s = -1; s <= 1; s += 2) {
-            const leg = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.05, 0.06, 0.25, 8),
-                new THREE.MeshStandardMaterial({ color: 0x1A252F, roughness: 0.6, transparent: true, opacity: 0.6 })
-            );
-            leg.position.set(s * 0.1, 0.12, 0.1);
-            ownerGroup.add(leg);
-        }
-
-        ownerGroup.position.set(-0.5, 0, 2.6);
-        ownerGroup.rotation.y = 0.3;
-        scene.add(ownerGroup);
-        console.log('👤 占位: 主人NPC → 沙发中央');
-
-        // ==================== 小八日常循环路径 ====================
-        // 路径：狗窝 → 狗粮碗 → 电视 → 主人 → 狗窝
+        // 黄色虚线路径 (小八巡游全屋)
         const pathPoints = [
-            { x: -2.2, z: -3.2, label: '狗窝' },
-            { x: -1.0, z: -2.5, label: '走廊' },
-            { x: 1.5,  z: -2.0, label: '走廊' },
-            { x: 2.8,  z: -1.8, label: '狗粮碗' },
-            { x: 2.5,  z: -1.0, label: '走廊' },
-            { x: 0.5,  z: -0.5, label: '走廊' },
-            { x: -1.5, z: -1.5, label: '走廊' },
-            { x: -2.0, z: -2.7, label: '电视' },
-            { x: -1.5, z: -1.0, label: '走廊' },
-            { x: 0,    z: 1.0,  label: '走廊' },
-            { x: -0.5, z: 2.3,  label: '主人身边' },
-            { x: -1.0, z: 0.5,  label: '走廊' },
-            { x: -1.5, z: -1.5, label: '走廊' },
-            { x: -2.2, z: -3.2, label: '狗窝' },
+            { x: -4, z: -4 }, { x: 0, z: -4 }, { x: 4, z: -4 },
+            { x: 4, z: 0 }, { x: 4, z: 4 },
+            { x: 0, z: 4 }, { x: -4, z: 4 },
+            { x: -4, z: 0 }, { x: -4, z: -4 }
         ];
-
-        // 创建虚线路径 (用一系列小方块)
         const pathMat = new THREE.MeshStandardMaterial({
-            color: 0xF9E79F,
-            roughness: 0.3,
-            transparent: true,
-            opacity: 0.5,
-            emissive: 0xF9E79F,
-            emissiveIntensity: 0.3
+            color: 0xF9E79F, roughness: 0.3, transparent: true, opacity: 0.5,
+            emissive: 0xF9E79F, emissiveIntensity: 0.3
         });
-
         for (let i = 0; i < pathPoints.length - 1; i++) {
-            const p1 = pathPoints[i];
-            const p2 = pathPoints[i + 1];
-            const dx = p2.x - p1.x;
-            const dz = p2.z - p1.z;
-            const dist = Math.sqrt(dx * dx + dz * dz);
-            const angle = Math.atan2(dx, dz);
+            const p1 = pathPoints[i], p2 = pathPoints[i + 1];
+            const dx = p2.x - p1.x, dz = p2.z - p1.z;
+            const dist = Math.sqrt(dx * dx + dz * dz), angle = Math.atan2(dx, dz);
             const segments = Math.floor(dist / 0.2);
-
             for (let s = 0; s < segments; s++) {
-                if (s % 2 === 0) { // 虚线效果：每隔一段放置
+                if (s % 2 === 0) {
                     const t = s / segments;
-                    const px = p1.x + dx * t;
-                    const pz = p1.z + dz * t;
-                    const pathSeg = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.08, 0.01, 0.12),
-                        pathMat
-                    );
-                    pathSeg.position.set(px, 0.02, pz);
-                    pathSeg.rotation.y = angle;
-                    scene.add(pathSeg);
+                    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 0.12), pathMat);
+                    seg.position.set(p1.x + dx * t, 0.02, p1.z + dz * t);
+                    seg.rotation.y = angle;
+                    scene.add(seg);
                 }
             }
         }
-        console.log('🛤️ 路径: 小八日常循环 → 狗窝↔狗粮碗↔电视↔主人↔狗窝');
+        console.log('🛤️ 路径已创建');
 
-        // ==================== 法斗模型 (小八) - 加载OBJ模型 ====================
+        // ==================== 法斗模型 (小八) ====================
         const bulldogGroup = new THREE.Group();
 
         // 加载GLB法斗模型（无水印）
-        const gltfLoader = new GLTFLoader();
         gltfLoader.load('french_dog.glb', (gltf) => {
             const model = gltf.scene;
             // 缩小模型，适配场景
@@ -456,35 +213,31 @@
             console.error('❌ GLB加载失败:', error);
         });
 
-        bulldogGroup.position.set(0, 0, 1.5);
+
+        bulldogGroup.position.set(0, 0, 0);
         scene.add(bulldogGroup);
 
         // ==================== 交互系统 ====================
         const interactables = [
             {
-                id: 'bowl', name: '狗粮碗', object: scene,
-                position: new THREE.Vector3(2.8, 0, -1.8),
-                action: () => showFeedback('🐶 小八低头吃了几口狗粮... 真香！')
+                id: 'bedroom', name: '卧室', object: scene,
+                position: new THREE.Vector3(-4, 0, -4),
+                action: () => showFeedback('🛏️ 小八的温暖卧室...')
             },
             {
-                id: 'water', name: '水碗', object: scene,
-                position: new THREE.Vector3(2.8, 0, -2.2),
-                action: () => showFeedback('💧 小八咕咚咕咚喝了几口水...')
+                id: 'livingroom', name: '客厅', object: scene,
+                position: new THREE.Vector3(4, 0, -4),
+                action: () => showFeedback('🛋️ 宽敞明亮的客厅...')
             },
             {
-                id: 'bed', name: '狗窝', object: scene,
-                position: new THREE.Vector3(-2.2, 0, -3.2),
-                action: () => showFeedback('🛌 小八在窝里转了个圈，舒服地趴下了...')
+                id: 'kitchen', name: '厨房', object: scene,
+                position: new THREE.Vector3(-4, 0, 4),
+                action: () => showFeedback('🍳 香喷喷的厨房...')
             },
             {
-                id: 'tv', name: '电视', object: scene,
-                position: new THREE.Vector3(-2.0, 0.65, -2.7),
-                action: () => showFeedback('📺 电视里播放着动物世界，小八歪着头看得很认真...')
-            },
-            {
-                id: 'sofa', name: '主人', object: ownerGroup,
-                position: new THREE.Vector3(-0.5, 0, 2.6),
-                action: () => showFeedback('👤 主人摸了摸小八的头："乖狗狗~"')
+                id: 'bathroom', name: '卫生间', object: scene,
+                position: new THREE.Vector3(4, 0, 4),
+                action: () => showFeedback('🚿 干净的卫生间...')
             },
             {
                 id: 'photo', name: '旧照片', object: scene,
@@ -616,16 +369,12 @@
                 const newX = bulldogGroup.position.x + move.x;
                 const newZ = bulldogGroup.position.z + move.z;
 
-                // 碰撞检测 (房间8m x 10m, X: ±3.3, Z: -4.3 ~ 4.3)
-                const clampedX = Math.max(-3.3, Math.min(3.3, newX));
-                const clampedZ = Math.max(-4.3, Math.min(4.3, newZ));
+                // 碰撞检测 (四房间布局, X: ±7, Z: ±7)
+                const clampedX = Math.max(-7, Math.min(7, newX));
+                const clampedZ = Math.max(-7, Math.min(7, newZ));
 
-                // 家具碰撞 (仅阻挡大型家具)
-                const furniture = [
-                    { x: -0.5, z: 2.4, r: 0.6 },   // 沙发 (缩小碰撞半径)
-                    { x: 2.5, z: -1.5, r: 0.6 },   // 橱柜1
-                    { x: 1.5, z: -2.5, r: 0.6 },   // 橱柜2
-                ];
+                // 房间之间可以自由穿行，无家具碰撞
+                const furniture = [];
 
                 let canMoveX = true, canMoveZ = true;
                 const playerR = 0.25; // 法斗碰撞半径
@@ -679,12 +428,7 @@
             updateMovement(dt);
             updateCamera();
 
-            // 主人翻书动画
             const time = Date.now() * 0.001;
-            const ownerArmLRef = ownerGroup.children[2];
-            const ownerArmRRef = ownerGroup.children[3];
-            if (ownerArmLRef) ownerArmLRef.rotation.x = Math.sin(time * 0.5) * 0.1;
-            if (ownerArmRRef) ownerArmRRef.rotation.x = Math.sin(time * 0.5 + 0.5) * 0.1;
 
             // 检测是否在移动
             const isMoving = keyState.w || keyState.a || keyState.s || keyState.d;
