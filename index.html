@@ -71,7 +71,7 @@
     <div id="info">🐶 小八的家 | 卧室 · 客厅 · 厨房 · 卫生间</div>
     <div id="interact-hint">按 <kbd>E</kbd> 互动</div>
     <div id="action-feedback"></div>
-    <div id="controls-hint">WASD 移动 · 鼠标拖动视角 · 滚轮缩放</div>
+    <div id="controls-hint">WASD 移动 · 空格 跳跃 · 鼠标拖动视角 · 滚轮缩放</div>
 
     <script type="importmap">
         {
@@ -128,6 +128,20 @@
         const wallThick = 0.15;
         const wallColor = 0xD4C5A9;
 
+        // ==================== 碰撞体积系统 ====================
+        // colliders 存放所有 AABB 碰撞盒，格式：{ minX, maxX, minZ, maxZ }
+        const colliders = [];
+        const playerRadius = 0.25; // 法斗碰撞半径（米）
+
+        function addCollider(cx, cz, halfW, halfD) {
+            colliders.push({
+                minX: cx - halfW,
+                maxX: cx + halfW,
+                minZ: cz - halfD,
+                maxZ: cz + halfD
+            });
+        }
+
         function addWall(x, z, w, d) {
             const geo = new THREE.BoxGeometry(w, wallH, d);
             const mat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.7 });
@@ -136,6 +150,8 @@
             wall.castShadow = true;
             wall.receiveShadow = true;
             scene.add(wall);
+            // 同步注册碰撞体积
+            addCollider(x, z, w / 2, d / 2);
             return wall;
         }
 
@@ -286,6 +302,7 @@
         wall.castShadow = true;
         wall.receiveShadow = true;
         scene.add(wall);
+        addCollider(wallCenterX, wallZ, wallLength / 2, 0.15); // 过渡墙1碰撞体积
         console.log('🧱 厨房-卫生间过渡墙已创建');
 
         // 过渡墙前面的装饰模型
@@ -317,6 +334,7 @@
         wall2.castShadow = true;
         wall2.receiveShadow = true;
         scene.add(wall2);
+        addCollider(wall2X, wall2CenterZ, 0.15, wall2Length / 2); // 过渡墙2碰撞体积
         console.log('🧱 卫生间-客厅过渡墙已创建');
 
         // ==================== 路径 ====================
@@ -427,9 +445,16 @@
         }
 
         // ==================== 第三人称控制 ====================
-        const keyState = { w: false, a: false, s: false, d: false };
+        const keyState = { w: false, a: false, s: false, d: false, space: false };
         const moveSpeed = 2.0;
         const playerDir = new THREE.Vector3();
+
+        // ==================== 跳跃系统 ====================
+        let velocityY = 0;
+        const gravity = -12;
+        const jumpForce = 4.5;
+        const groundY = 0;      // 地面高度
+        let isOnGround = true;
 
         let cameraYaw = Math.PI;
         let cameraPitch = 0.55;
@@ -524,6 +549,13 @@
                 case 'KeyA': keyState.a = true; e.preventDefault(); break;
                 case 'KeyS': keyState.s = true; e.preventDefault(); break;
                 case 'KeyD': keyState.d = true; e.preventDefault(); break;
+                case 'Space':
+                    if (isOnGround) {
+                        velocityY = jumpForce;
+                        isOnGround = false;
+                    }
+                    e.preventDefault();
+                    break;
                 case 'KeyE':
                     const item = checkInteraction();
                     if (item) item.action();
@@ -540,6 +572,33 @@
             }
         });
 
+        // 检测点 (px, pz) 与某个 collider 是否重叠（含玩家半径）
+        function resolveColliders(px, pz) {
+            let rx = px, rz = pz;
+            for (const c of colliders) {
+                const expandedMinX = c.minX - playerRadius;
+                const expandedMaxX = c.maxX + playerRadius;
+                const expandedMinZ = c.minZ - playerRadius;
+                const expandedMaxZ = c.maxZ + playerRadius;
+
+                if (rx > expandedMinX && rx < expandedMaxX &&
+                    rz > expandedMinZ && rz < expandedMaxZ) {
+                    // 计算从哪个轴推出穿透量最小
+                    const overlapLeft  = rx - expandedMinX;
+                    const overlapRight = expandedMaxX - rx;
+                    const overlapFront = rz - expandedMinZ;
+                    const overlapBack  = expandedMaxZ - rz;
+                    const minOverlap = Math.min(overlapLeft, overlapRight, overlapFront, overlapBack);
+
+                    if (minOverlap === overlapLeft)       rx = expandedMinX;
+                    else if (minOverlap === overlapRight) rx = expandedMaxX;
+                    else if (minOverlap === overlapFront) rz = expandedMinZ;
+                    else                                  rz = expandedMaxZ;
+                }
+            }
+            return { x: rx, z: rz };
+        }
+
         function updateMovement(dt) {
             const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw)).normalize();
             const right = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw)).normalize();
@@ -554,20 +613,38 @@
                 playerDir.normalize();
                 const move = playerDir.clone().multiplyScalar(moveSpeed * dt);
 
-                const newX = bulldogGroup.position.x + move.x;
-                const newZ = bulldogGroup.position.z + move.z;
+                // 先分轴移动，再各自做碰撞解算（防止角落卡死）
+                let newX = bulldogGroup.position.x + move.x;
+                let newZ = bulldogGroup.position.z + move.z;
 
-                const clampedX = Math.max(-4.2, Math.min(4.2, newX));
-                const clampedZ = Math.max(-4.2, Math.min(4.2, newZ));
+                // 世界边界（四面外墙内侧）
+                newX = Math.max(-4.2, Math.min(4.2, newX));
+                newZ = Math.max(-4.2, Math.min(4.2, newZ));
 
-                bulldogGroup.position.x = clampedX;
-                bulldogGroup.position.z = clampedZ;
+                // 碰撞解算：先只移动 X 轴
+                const afterX = resolveColliders(newX, bulldogGroup.position.z);
+                newX = afterX.x;
+                // 再只移动 Z 轴
+                const afterZ = resolveColliders(newX, newZ);
+                newZ = afterZ.z;
+
+                bulldogGroup.position.x = newX;
+                bulldogGroup.position.z = newZ;
 
                 const targetAngle = Math.atan2(move.x, move.z);
                 let angleDiff = targetAngle - bulldogGroup.rotation.y;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
                 bulldogGroup.rotation.y += angleDiff * Math.min(1, dt * 8);
+            }
+
+            // ---- 跳跃 / 重力 ----
+            velocityY += gravity * dt;
+            bulldogGroup.position.y += velocityY * dt;
+            if (bulldogGroup.position.y <= groundY) {
+                bulldogGroup.position.y = groundY;
+                velocityY = 0;
+                isOnGround = true;
             }
         }
 
@@ -588,7 +665,7 @@
 
             camX = Math.max(-4.0, Math.min(4.0, camX));
             camZ = Math.max(-4.0, Math.min(4.0, camZ));
-            camY = Math.max(0.3, Math.min(2.5, camY));
+            camY = Math.max(0.3, Math.min(4.0, camY)); // 上限提高以跟随跳跃
 
             camera.position.set(camX, camY, camZ);
             camera.lookAt(target);
@@ -617,16 +694,24 @@
 
             if (bulldogGroup.children.length > 0 && bulldogGroup.children[0]) {
                 const model = bulldogGroup.children[0];
-                const groundY = 0.28;
+                const modelBaseY = 0.28; // 模型相对于 bulldogGroup 的基础 Y
 
-                if (isMoving) {
+                if (!isOnGround) {
+                    // 空中：通过 bulldogGroup 做轻微拉伸，不碰 model.scale
+                    model.position.y = modelBaseY;
+                    model.rotation.x = 0;
+                    model.rotation.z = 0;
+                    const stretchY = velocityY > 0 ? 1.08 : 0.92;
+                    bulldogGroup.scale.set(1 / stretchY, stretchY, 1 / stretchY);
+                } else if (isMoving) {
                     walkCycle += dt * 8;
                     const bounce = Math.abs(Math.sin(walkCycle)) * 0.03;
-                    model.position.y = groundY + bounce;
+                    model.position.y = modelBaseY + bounce;
+                    bulldogGroup.scale.set(1, 1, 1);
                     model.rotation.x = Math.sin(walkCycle) * 0.08;
                     model.rotation.z = Math.sin(walkCycle * 2) * 0.04;
                 } else {
-                    model.position.y += (groundY - model.position.y) * 0.1;
+                    model.position.y += (modelBaseY - model.position.y) * 0.1;
                     model.rotation.x += (0 - model.rotation.x) * 0.1;
                     model.rotation.z += (0 - model.rotation.z) * 0.1;
                     walkCycle = 0;
