@@ -253,71 +253,7 @@
         loadRoom('bedroom.glb',   0.5, -spacingX + bedroomOffsetX, -spacingZ, 0,              '卧室');
         loadObjRoom('livingroom.obj', 'livingroom.mtl', 0.5, spacingX, -spacingZ, -Math.PI/2, '客厅');
         loadRoom('kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房');
-
-        // 额外加载厨房桌子模型（只取桌子和桌上物品）
-        gltfLoader.load('kitchen_table.glb', (gltf) => {
-            const tableScene = gltf.scene;
-            tableScene.scale.set(0.5, 0.5, 0.5);
-            tableScene.position.set(-spacingX, 0, spacingZ - kitchenOffsetZ);
-            tableScene.rotation.y = Math.PI / 2;
-            tableScene.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-            scene.add(tableScene);
-            console.log('🍽️ 厨房桌子模型加载成功！');
-        }, undefined, (error) => {
-            console.error('❌ 厨房桌子加载失败:', error);
-        });
         loadRoom('bathroom.glb',  0.5,  spacingX,  spacingZ - bathroomOffsetZ, Math.PI,       '卫生间');
-
-        // 过渡墙体：厨房与卫生间之间的浅棕色连接墙
-        const wallStartX = -spacingX + 1.5;
-        const wallEndX = spacingX - 1.5;
-        const wallCenterX = (wallStartX + wallEndX) / 2;
-        const wallLength = wallEndX - wallStartX;
-        const wallZ = (spacingZ - kitchenOffsetZ + spacingZ - bathroomOffsetZ) / 2 + 1.6;
-        const wallGeo = new THREE.BoxGeometry(wallLength, 2.8, 0.3);
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0xE2A66D, roughness: 0.45, metalness: 0.03 });
-        const wall = new THREE.Mesh(wallGeo, wallMat);
-        wall.position.set(wallCenterX, 1.4, wallZ);
-        wall.castShadow = true;
-        wall.receiveShadow = true;
-        scene.add(wall);
-        console.log('🧱 厨房-卫生间过渡墙已创建');
-
-        // 过渡墙前面的装饰模型
-        gltfLoader.load('transition_deco.glb', (gltf) => {
-            const deco = gltf.scene;
-            deco.scale.set(0.5, 0.5, 0.5);
-            deco.position.set(wallCenterX + 0.1, 0.3, wallZ + 0.95);
-            deco.rotation.y = Math.PI / 2;
-            deco.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-            scene.add(deco);
-            console.log('🖼️ 过渡墙装饰加载成功！');
-        });
-
-        // 过渡墙2：卫生间与客厅之间
-        const wall2StartZ = -spacingZ + 1.5;
-        const wall2EndZ = spacingZ - bathroomOffsetZ - 1.5;
-        const wall2CenterZ = (wall2StartZ + wall2EndZ) / 2;
-        const wall2Length = wall2EndZ - wall2StartZ;
-        const wall2X = spacingX + 1.8;
-        const wall2Geo = new THREE.BoxGeometry(0.3, 2.8, wall2Length);
-        const wall2Mat = new THREE.MeshStandardMaterial({ color: 0xE2A66D, roughness: 0.45, metalness: 0.03 });
-        const wall2 = new THREE.Mesh(wall2Geo, wall2Mat);
-        wall2.position.set(wall2X, 1.4, wall2CenterZ);
-        wall2.castShadow = true;
-        wall2.receiveShadow = true;
-        scene.add(wall2);
-        console.log('🧱 卫生间-客厅过渡墙已创建');
 
         // ==================== 路径 ====================
         const pathR = 3.5;
