@@ -65,13 +65,84 @@
             pointer-events: none;
             white-space: nowrap;
         }
+
+        /* ====== 闪回效果叠加层 ====== */
+        #flashback-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 1.2s ease-in-out;
+        }
+        /* sepia 暖色怀旧滤镜 */
+        #flashback-overlay.active {
+            opacity: 1;
+        }
+        #flashback-overlay .sepia-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(112, 66, 20, 0.35);
+            filter: blur(2px) sepia(0.7) saturate(0.8);
+        }
+        /* 模糊层 */
+        #flashback-overlay .blur-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+        /* 闪回文字 */
+        #flashback-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Comic Sans MS', 'YouYuan', cursive, sans-serif;
+            font-size: clamp(20px, 3.5vw, 36px);
+            color: #FFE4B5;
+            text-shadow:
+                0 0 10px rgba(255, 228, 181, 0.8),
+                0 0 30px rgba(255, 180, 80, 0.5),
+                0 2px 8px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            line-height: 1.6;
+            max-width: 80vw;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            white-space: pre-line;
+            letter-spacing: 0.05em;
+        }
+        #flashback-overlay.active #flashback-text {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
     <div id="info">🐶 小八的家 | 卧室 · 客厅 · 厨房 · 卫生间</div>
     <div id="interact-hint">按 <kbd>E</kbd> 互动</div>
     <div id="action-feedback"></div>
-    <div id="controls-hint">WASD 移动 · 鼠标拖动视角 · 滚轮缩放</div>
+    <div id="controls-hint">WASD 移动 · 空格 跳跃 · 鼠标拖动视角 · 滚轮缩放</div>
+    <div id="pos-display" style="position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#0f0;padding:8px 14px;border-radius:6px;font-size:13px;font-family:monospace;pointer-events:none;z-index:100;"></div>
+
+    <!-- 闪回效果叠加层 -->
+    <div id="flashback-overlay">
+        <div class="blur-layer"></div>
+        <div class="sepia-layer"></div>
+        <div id="flashback-text">总是满的...<br>但最近没什么味道了。</div>
+    </div>
+    <!-- 玩具球闪回叠加层 -->
+    <div id="flashback-ball-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity 1.2s ease-in-out;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);"></div>
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.35);filter:blur(2px) sepia(0.7) saturate(0.8);"></div>
+        <div id="flashback-ball-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(18px,3vw,30px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;">这个球是主人最常扔的…<br>我已经很久没有追过它了。</div>
+    </div>
+    <!-- 遥控器闪回叠加层 -->
+    <div id="flashback-remote-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity 1.2s ease-in-out;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);"></div>
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.35);filter:blur(2px) sepia(0.7) saturate(0.8);"></div>
+        <div id="flashback-remote-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;">以前主人抱着我一起看电视…<br>现在他的眼睛不再看屏幕了。</div>
+    </div>
 
     <script type="importmap">
         {
@@ -128,6 +199,28 @@
         const wallThick = 0.15;
         const wallColor = 0xD4C5A9;
 
+        // ==================== 碰撞体积系统 ====================
+        // colliders 存放所有 AABB 碰撞盒，格式：{ minX, maxX, minZ, maxZ }
+        const colliders = [];
+        const playerRadius = 0.25; // 法斗碰撞半径（米）
+
+        function addCollider(cx, cz, halfW, halfD, showBox = false, boxH = 1.0, boxY = 0.5, isPlatform = false) {
+            colliders.push({
+                minX: cx - halfW,
+                maxX: cx + halfW,
+                minZ: cz - halfD,
+                maxZ: cz + halfD,
+                platformTop: isPlatform ? boxY + boxH / 2 : -Infinity  // 平台顶部高度
+            });
+            if (showBox) {
+                const boxGeo = new THREE.BoxGeometry(halfW * 2, boxH, halfD * 2);
+                const boxMat = new THREE.MeshBasicMaterial({ color: isPlatform ? 0x44ff44 : 0xff4444, transparent: true, opacity: 0.3, wireframe: true });
+                const box = new THREE.Mesh(boxGeo, boxMat);
+                box.position.set(cx, boxY, cz);
+                scene.add(box);
+            }
+        }
+
         function addWall(x, z, w, d) {
             const geo = new THREE.BoxGeometry(w, wallH, d);
             const mat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.7 });
@@ -136,21 +229,24 @@
             wall.castShadow = true;
             wall.receiveShadow = true;
             scene.add(wall);
+            // 同步注册碰撞体积
+            addCollider(x, z, w / 2, d / 2);
             return wall;
         }
 
         // 四面墙壁
         addWall(0, -houseHalf, 9, wallThick);          // 前
-        addWall(0, houseHalf, 9, wallThick);           // 后
+        addWall(0, houseHalf - 1.0, 9, wallThick);     // 后（内移1单位，靠近厨房卫生间）
         addWall(-houseHalf, 0, wallThick, 9);          // 左
         addWall(houseHalf, 0, wallThick, 9);           // 右
 
         // ==================== 地板 ====================
-        const floorGeo = new THREE.PlaneGeometry(9, 9);
+        // 地板覆盖到后墙位置（Z: -4.5 ~ 3.5）
+        const floorGeo = new THREE.PlaneGeometry(9, 8);
         const floorMat = new THREE.MeshStandardMaterial({ color: 0xD4A76A, roughness: 0.45, metalness: 0.03 });
         const floor = new THREE.Mesh(floorGeo, floorMat);
         floor.rotation.x = -Math.PI / 2;
-        floor.position.set(0, 0.01, 0);
+        floor.position.set(0, 0.01, -0.5);
         floor.receiveShadow = true;
         scene.add(floor);
 
@@ -171,6 +267,29 @@
             line2.receiveShadow = true;
             scene.add(line2);
         }
+
+        // 卧室床碰撞体（卧室在 X=-1.65, Z=-2.0，床靠左侧墙）
+        addCollider(-1.65 - 0.1, -2.0 - 1.15, 0.9, 1.0, true, 0.6, 0.3);
+
+        // 客厅碰撞体（客厅在 X=2.5, Z=-2.0）
+        addCollider(2.5 - 0.8 + 0.4 - 0.2, -2.0 + 0.675, 0.5, 0.75, true, 1.0, 0.5);
+
+        // 卫生间抬升区域：3m×3m×0.2m（仅可视化+抬升用，不阻挡移动）
+        (function() {
+            const cx = 2.5, cz = 1.65, hw = 1.5, hd = 1.5;
+            const boxGeo = new THREE.BoxGeometry(hw * 2, 0.2, hd * 2);
+            const boxMat = new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.25, wireframe: true });
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(cx, 0.1, cz); // 顶面在0.2m
+            scene.add(box);
+        })();
+
+        // 卫生间+Z侧后半区碰撞体积（Z从中点到最大值之间的一半）
+        addCollider(2.5, 2.775, 1.5, 0.375, true, 1.6, 1.0);
+
+        // 以上述碰撞体X和Z最大值点(4.0, 3.15)为轴心顺时针旋转90°得到的新碰撞体
+        // 原中心(2.5,2.775) → 新中心(4.375, 1.65)，尺寸互换: 0.375×1.5
+        addCollider(3.375, 1.65, 0.375, 1.5, true, 1.6, 1.0);
 
         // ==================== 天花板 ====================
         const ceilGeo = new THREE.PlaneGeometry(9, 9);
@@ -199,6 +318,9 @@
         // ==================== 房间模型加载 ====================
         const gltfLoader = new GLTFLoader();
 
+        // 玩具球引用（客厅加载后填充）
+        let toyBallMesh = null;
+
         function loadObjRoom(objFile, mtlFile, scale, posX, posZ, rotY, label) {
             const mtlLoader = new MTLLoader();
             mtlLoader.load(mtlFile, (materials) => {
@@ -213,6 +335,11 @@
                         if (child.isMesh) {
                             child.castShadow = true;
                             child.receiveShadow = true;
+                            // 查找玩具球：名称为"球体.019"的mesh
+                            if (label === '客厅' && child.name === '球体.019') {
+                                toyBallMesh = child;
+                                console.log('🏀 玩具球已找到！', child.name);
+                            }
                         }
                     });
                     scene.add(room);
@@ -225,7 +352,7 @@
             });
         }
 
-        function loadRoom(filename, scale, posX, posZ, rotY, label) {
+        function loadRoom(filename, scale, posX, posZ, rotY, label, addColl = false) {
             gltfLoader.load(filename, (gltf) => {
                 const room = gltf.scene;
                 room.scale.set(scale, scale, scale);
@@ -238,6 +365,30 @@
                     }
                 });
                 scene.add(room);
+
+                // 如果需要自动添加碰撞体（用于厨房桌子等）
+                if (addColl) {
+                    // 只计算Y>0.25m的对象（桌面和桌腿，排除地板/地毯）
+                    const tableBox = new THREE.Box3();
+                    room.traverse((child) => {
+                        if (child.isMesh) {
+                            const childBox = new THREE.Box3().setFromObject(child);
+                            // 只取世界Y坐标>0.25m的部分（桌面高度）
+                            if (childBox.max.y > 0.25) {
+                                tableBox.union(childBox);
+                            }
+                        }
+                    });
+                    const cx = (tableBox.min.x + tableBox.max.x) / 2;
+                    const cz = (tableBox.min.z + tableBox.max.z) / 2;
+                    const hw = (tableBox.max.x - tableBox.min.x) / 2;
+                    const hd = (tableBox.max.z - tableBox.min.z) / 2;
+                    const th = tableBox.max.y - tableBox.min.y;
+                    const ty = (tableBox.min.y + tableBox.max.y) / 2;
+                    console.log(`📦 ${label} 碰撞体: center=(${cx.toFixed(2)}, ${cz.toFixed(2)}), size=${(hw*2).toFixed(2)}×${(hd*2).toFixed(2)}, 高=${th.toFixed(2)}`);
+                    addCollider(cx, cz, hw, hd, true, th, ty);
+                }
+
                 console.log(`✅ ${label} 加载成功！`);
             }, undefined, (error) => {
                 console.error(`❌ ${label} 加载失败:`, error);
@@ -252,25 +403,7 @@
         const bathroomOffsetZ = 0.35; // 卫生间往客厅方向微调
         loadRoom('bedroom.glb',   0.5, -spacingX + bedroomOffsetX, -spacingZ, 0,              '卧室');
         loadObjRoom('livingroom.obj', 'livingroom.mtl', 0.5, spacingX, -spacingZ, -Math.PI/2, '客厅');
-        loadRoom('kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房');
-
-        // 额外加载厨房桌子模型（只取桌子和桌上物品）
-        gltfLoader.load('kitchen_table.glb', (gltf) => {
-            const tableScene = gltf.scene;
-            tableScene.scale.set(0.5, 0.5, 0.5);
-            tableScene.position.set(-spacingX, 0, spacingZ - kitchenOffsetZ);
-            tableScene.rotation.y = Math.PI / 2;
-            tableScene.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-            scene.add(tableScene);
-            console.log('🍽️ 厨房桌子模型加载成功！');
-        }, undefined, (error) => {
-            console.error('❌ 厨房桌子加载失败:', error);
-        });
+        loadRoom('kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房', false);
         loadRoom('bathroom.glb',  0.5,  spacingX,  spacingZ - bathroomOffsetZ, Math.PI,       '卫生间');
 
         // 过渡墙体：厨房与卫生间之间的浅棕色连接墙
@@ -286,13 +419,16 @@
         wall.castShadow = true;
         wall.receiveShadow = true;
         scene.add(wall);
+        addCollider(wallCenterX, wallZ, wallLength / 2, 0.15); // 过渡墙1碰撞体积
         console.log('🧱 厨房-卫生间过渡墙已创建');
 
-        // 过渡墙前面的装饰模型
+        // 过渡墙前面的装饰模型（摇篮椅）
         gltfLoader.load('transition_deco.glb', (gltf) => {
             const deco = gltf.scene;
             deco.scale.set(0.5, 0.5, 0.5);
-            deco.position.set(wallCenterX + 0.1, 0.3, wallZ + 0.95);
+            const chairPosX = wallCenterX + 0.1;   // ≈ 0.1
+            const chairPosZ = wallZ + 0.95;         // ≈ 4.125
+            deco.position.set(chairPosX, 0.3, chairPosZ);
             deco.rotation.y = Math.PI / 2;
             deco.traverse((child) => {
                 if (child.isMesh) {
@@ -301,7 +437,16 @@
                 }
             });
             scene.add(deco);
-            console.log('🖼️ 过渡墙装饰加载成功！');
+
+            // 用 Three.js 自动计算世界坐标系中的精确包围盒
+            const box = new THREE.Box3().setFromObject(deco);
+            const cx = (box.min.x + box.max.x) / 2;
+            const cz = (box.min.z + box.max.z) / 2;
+            const hw = (box.max.x - box.min.x) / 2;
+            const hd = (box.max.z - box.min.z) / 2;
+            console.log(`🪑 摇篮椅包围盒: center=(${cx.toFixed(2)}, ${cz.toFixed(2)}), size=${(hw*2).toFixed(2)}×${(hd*2).toFixed(2)}, Z=[${box.min.z.toFixed(2)}, ${box.max.z.toFixed(2)}]`);
+            
+            addCollider(cx, cz, hw, hd, true, 1.22, 0.91);
         });
 
         // 过渡墙2：卫生间与客厅之间
@@ -317,6 +462,7 @@
         wall2.castShadow = true;
         wall2.receiveShadow = true;
         scene.add(wall2);
+        addCollider(wall2X, wall2CenterZ, 0.15, wall2Length / 2); // 过渡墙2碰撞体积
         console.log('🧱 卫生间-客厅过渡墙已创建');
 
         // ==================== 路径 ====================
@@ -347,6 +493,135 @@
             }
         }
 
+        // ==================== 狗粮碗（摇篮椅旁边）====================
+        const dogBowlGroup = new THREE.Group();
+
+        // 碗体：不锈钢金属质感（圆柱 + 底部圆角）
+        const bowlRadius = 0.25;
+        const bowlHeight = 0.12;
+        const bowlThickness = 0.008;
+        // 外壁
+        const bowlGeo = new THREE.CylinderGeometry(bowlRadius, bowlRadius * 0.65, bowlHeight, 32, 1, true);
+        const bowlMat = new THREE.MeshStandardMaterial({
+            color: 0xC0C0C0, metalness: 0.85, roughness: 0.2,
+            side: THREE.DoubleSide
+        });
+        const bowlOuter = new THREE.Mesh(bowlGeo, bowlMat);
+        bowlOuter.position.y = bowlHeight / 2;
+        dogBowlGroup.add(bowlOuter);
+        // 底部
+        const bowlBottomGeo = new THREE.CircleGeometry(bowlRadius * 0.65, 32);
+        const bowlBottom = new THREE.Mesh(bowlBottomGeo, bowlMat);
+        bowlBottom.rotation.x = -Math.PI / 2;
+        bowlBottom.position.y = 0;
+        dogBowlGroup.add(bowlBottom);
+        // 碗口边缘（加厚环）
+        const rimGeo = new THREE.TorusGeometry(bowlRadius, bowlThickness * 1.5, 8, 32);
+        const rimMat = new THREE.MeshStandardMaterial({
+            color: 0xB0B0B0, metalness: 0.8, roughness: 0.25
+        });
+        const rim = new THREE.Mesh(rimGeo, rimMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = bowlHeight;
+        dogBowlGroup.add(rim);
+
+        // 狗粮颗粒（棕色小圆球，堆成小山状）
+        const kibbleColor = 0x8B5A2B;
+        const kibbleMat = new THREE.MeshStandardMaterial({
+            color: kibbleColor, roughness: 0.7, metalness: 0.02
+        });
+        const kibbleGeo = new THREE.SphereGeometry(0.012, 6, 5); // 小圆球
+        const kibbleCount = 80; // 颗粒数量
+        for (let i = 0; i < kibbleCount; i++) {
+            const kibble = new THREE.Mesh(kibbleGeo, kibbleMat);
+            // 圆柱坐标系随机分布，中心高边缘低（堆成山）
+            const r = Math.random() * bowlRadius * 0.78;
+            const theta = Math.random() * Math.PI * 2;
+            // 越靠近中心越高
+            const heightFactor = 1 - (r / (bowlRadius * 0.78)) * 0.85;
+            const baseH = bowlHeight * 0.15 + heightFactor * (bowlHeight * 0.75);
+            const jitterY = Math.random() * 0.01;
+            kibble.position.set(
+                r * Math.cos(theta) + (Math.random() - 0.5) * 0.03,
+                baseH + jitterY,
+                r * Math.sin(theta) + (Math.random() - 0.5) * 0.03
+            );
+            // 随机微旋转让每个颗粒看起来不同
+            kibble.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+            dogBowlGroup.add(kibble);
+        }
+
+        // 放置位置：摇篮椅右侧前方一点（摇篮椅约在 wallCenterX+0.1, wallZ+0.95）
+        const bowlPosX = wallCenterX + 0.9 - 0.5 - 0.8;
+        const bowlPosZ = wallZ + 0.55 - 2 + 0.5 + 0.5;
+        dogBowlGroup.position.set(bowlPosX, 0, bowlPosZ);
+        dogBowlGroup.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        scene.add(dogBowlGroup);
+        console.log('🍖 狗粮碗已放置在摇篮椅旁！');
+
+        // 狗粮碗碰撞体（小型，不阻挡移动但可交互）
+        addCollider(dogBowlGroup.position.x, dogBowlGroup.position.z, 0.22, 0.22);
+
+        // ==================== 遥控器（客厅桌子上） ====================
+        const remoteGroup = new THREE.Group();
+        const remotePosX = 1.35;
+        const remotePosZ = -1.68;
+        const remotePosY = 0.45; // 桌面高度
+
+        // 遥控器主体：扁长方体
+        const remoteBodyGeo = new THREE.BoxGeometry(0.18, 0.04, 0.06);
+        const remoteBodyMat = new THREE.MeshStandardMaterial({
+            color: 0x333333, metalness: 0.2, roughness: 0.5
+        });
+        const remoteBody = new THREE.Mesh(remoteBodyGeo, remoteBodyMat);
+        remoteBody.position.y = 0;
+        remoteBody.castShadow = true;
+        remoteBody.receiveShadow = true;
+        remoteGroup.add(remoteBody);
+
+        // 按键：几个小凸起方块
+        const btnMat = new THREE.MeshStandardMaterial({
+            color: 0x888888, metalness: 0.1, roughness: 0.4
+        });
+        const btnSize = { w: 0.02, h: 0.006, d: 0.02 };
+        // 方向键区（上方）
+        const btnPositions = [
+            { x: 0, z: 0.015 },          // 上
+            { x: 0, z: -0.015 },         // 下
+            { x: -0.015, z: 0 },         // 左
+            { x: 0.015, z: 0 },          // 右
+            { x: 0, z: 0 },              // 中
+            // 数字键区（下方）
+            { x: -0.04, z: -0.015 },     // 1
+            { x: -0.02, z: -0.015 },     // 2
+            { x: 0, z: -0.015 },         // 3
+            { x: -0.04, z: 0.015 },      // 4
+            { x: -0.02, z: 0.015 },      // 5
+            { x: 0, z: 0.015 },          // 6
+        ];
+        btnPositions.forEach(bp => {
+            const btnGeo = new THREE.BoxGeometry(btnSize.w, btnSize.h, btnSize.d);
+            const btn = new THREE.Mesh(btnGeo, btnMat);
+            btn.position.set(bp.x, 0.02 + btnSize.h / 2, bp.z);
+            btn.castShadow = true;
+            remoteGroup.add(btn);
+        });
+
+        remoteGroup.position.set(remotePosX, remotePosY, remotePosZ);
+        // 稍微旋转使遥控器看起来自然摆放
+        remoteGroup.rotation.y = 0.3;
+        scene.add(remoteGroup);
+        console.log('📺 遥控器已放置在客厅桌子上！');
+
         // ==================== 法斗模型 ====================
         const bulldogGroup = new THREE.Group();
 
@@ -370,37 +645,25 @@
         scene.add(bulldogGroup);
 
         // ==================== 交互系统 ====================
-        const interactables = [
-            {
-                id: 'bedroom', name: '卧室', object: scene,
-                position: new THREE.Vector3(-spacingX, 0, -spacingZ),
-                action: () => showFeedback('🛏️ 小八的温暖卧室...')
-            },
-            {
-                id: 'livingroom', name: '客厅', object: scene,
-                position: new THREE.Vector3(spacingX, 0, -spacingZ),
-                action: () => showFeedback('🛋️ 宽敞明亮的客厅...')
-            },
-            {
-                id: 'kitchen', name: '厨房', object: scene,
-                position: new THREE.Vector3(-spacingX, 0, spacingZ),
-                action: () => showFeedback('🍳 香喷喷的厨房...')
-            },
-            {
-                id: 'bathroom', name: '卫生间', object: scene,
-                position: new THREE.Vector3(spacingX, 0, spacingZ),
-                action: () => showFeedback('🚿 干净的卫生间...')
-            },
-            {
-                id: 'photo', name: '旧照片', object: scene,
-                position: new THREE.Vector3(-3.0, 0.3, 0),
-                action: () => showFeedback('📷 墙上的旧照片记录着美好的回忆...')
-            }
-        ];
-
         const hintEl = document.getElementById('interact-hint');
         const feedbackEl = document.getElementById('action-feedback');
+        const flashbackOverlay = document.getElementById('flashback-overlay');
         let feedbackTimeout = null;
+        let flashbackTimeout = null;
+
+        // 狗粮碗交互状态
+        let dogBowlInteracted = false;
+
+        // 狗粮碗位置（世界坐标，供碰撞检测和每帧检查）
+        const dogBowlWorldPos = new THREE.Vector3(bowlPosX, 0, bowlPosZ);
+
+        // 玩具球交互状态
+        let toyBallInteracted = false;
+        const toyBallWorldPos = new THREE.Vector3(0.11, 0, -1.50);
+
+        // 遥控器交互状态
+        let remoteInteracted = false;
+        const remoteWorldPos = new THREE.Vector3(remotePosX, 0, remotePosZ);
 
         function showFeedback(text) {
             feedbackEl.textContent = text;
@@ -409,15 +672,162 @@
             feedbackTimeout = setTimeout(() => feedbackEl.classList.remove('show'), 2500);
         }
 
+        // 闪回效果（狗粮碗）
+        function triggerFlashback() {
+            if (dogBowlInteracted) return;
+            dogBowlInteracted = true;
+
+            // 激活闪回叠加层
+            flashbackOverlay.classList.add('active');
+
+            // 碗交互后发光变色
+            dogBowlGroup.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    if (child.material.color &&
+                        (child.material.color.getHex() === 0xC0C0C0 ||
+                         child.material.color.getHex() === 0xB0B0B0)) {
+                        child.material.emissive = new THREE.Color(0xFFE4B5);
+                        child.material.emissiveIntensity = 0.6;
+                    }
+                }
+            });
+
+            // 3秒后自动消失
+            clearTimeout(flashbackTimeout);
+            flashbackTimeout = setTimeout(() => {
+                flashbackOverlay.classList.remove('active');
+            }, 3000);
+
+            console.log('💭 闪回效果触发：总是满的...但最近没什么味道了。');
+        }
+
+        // 闪回效果（玩具球）
+        const flashbackBallOverlay = document.getElementById('flashback-ball-overlay');
+        const flashbackBallText = document.getElementById('flashback-ball-text');
+        let flashbackBallTimeout = null;
+
+        function triggerBallFlashback() {
+            if (toyBallInteracted) return;
+            toyBallInteracted = true;
+
+            // 激活玩具球闪回叠加层
+            flashbackBallOverlay.style.opacity = '1';
+            flashbackBallText.style.opacity = '1';
+
+            // 球体发光变色
+            if (toyBallMesh) {
+                toyBallMesh.material = toyBallMesh.material.clone();
+                toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
+                toyBallMesh.material.emissiveIntensity = 0.5;
+            }
+
+            // 弹跳动画：向上跳起0.05再落下
+            let bounceTime = 0;
+            const bounceDuration = 0.4;
+            const bounceHeight = 0.05;
+            const originalY = toyBallMesh ? toyBallMesh.position.y : 0;
+
+            function animateBounce() {
+                if (!toyBallMesh) return;
+                bounceTime += 0.016;
+                const t = bounceTime / bounceDuration;
+                if (t >= 1) {
+                    toyBallMesh.position.y = originalY;
+                    return;
+                }
+                // 抛物线弹跳
+                const bounce = bounceHeight * 4 * t * (1 - t);
+                toyBallMesh.position.y = originalY + bounce;
+                requestAnimationFrame(animateBounce);
+            }
+            animateBounce();
+
+            // 3秒后消失
+            clearTimeout(flashbackBallTimeout);
+            flashbackBallTimeout = setTimeout(() => {
+                flashbackBallOverlay.style.opacity = '0';
+                flashbackBallText.style.opacity = '0';
+            }, 3000);
+
+            console.log('🏀 闪回效果触发：这个球是主人最常扔的…');
+        }
+
+        // 闪回效果（遥控器）
+        const flashbackRemoteOverlay = document.getElementById('flashback-remote-overlay');
+        const flashbackRemoteText = document.getElementById('flashback-remote-text');
+        let flashbackRemoteTimeout = null;
+
+        function triggerRemoteFlashback() {
+            if (remoteInteracted) return;
+            remoteInteracted = true;
+
+            flashbackRemoteOverlay.style.opacity = '1';
+            flashbackRemoteText.style.opacity = '1';
+
+            // 遥控器发光
+            remoteGroup.traverse((child) => {
+                if (child.isMesh && child.material.emissive) {
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.4;
+                }
+            });
+
+            clearTimeout(flashbackRemoteTimeout);
+            flashbackRemoteTimeout = setTimeout(() => {
+                flashbackRemoteOverlay.style.opacity = '0';
+                flashbackRemoteText.style.opacity = '0';
+            }, 3000);
+
+            console.log('📺 闪回效果触发：以前主人抱着我一起看电视…');
+        }
+
         function checkInteraction() {
             const playerPos = bulldogGroup.position;
             let closestDist = Infinity, closestItem = null;
-            interactables.forEach(item => {
-                const dist = playerPos.distanceTo(item.position);
-                if (dist < 2.0 && dist < closestDist) { closestDist = dist; closestItem = item; }
-            });
+
+            // 检查遥控器（最高优先级）
+            const remoteDist = playerPos.distanceTo(remoteWorldPos);
+            if (remoteDist < 2.0) {
+                closestDist = remoteDist;
+                closestItem = {
+                    id: 'remote',
+                    name: '遥控器',
+                    action: () => triggerRemoteFlashback()
+                };
+            }
+
+            // 检查玩具球
+            const ballDist = playerPos.distanceTo(toyBallWorldPos);
+            if (ballDist < 0.6) {
+                closestDist = ballDist;
+                closestItem = {
+                    id: 'toyball',
+                    name: '玩具球',
+                    action: () => triggerBallFlashback()
+                };
+            }
+
+            // 检查狗粮碗
+            const bowlDist = playerPos.distanceTo(dogBowlWorldPos);
+            if (bowlDist < 1.0 && bowlDist < closestDist) {
+                closestDist = bowlDist;
+                closestItem = {
+                    id: 'dogbowl',
+                    name: '狗粮碗',
+                    action: () => triggerFlashback()
+                };
+            }
+
             if (closestItem) {
-                hintEl.textContent = `按 E 键 与 ${closestItem.name} 互动`;
+                if (closestItem.id === 'dogbowl' && dogBowlInteracted) {
+                    hintEl.textContent = '狗粮碗...已经回忆过了';
+                } else if (closestItem.id === 'toyball' && toyBallInteracted) {
+                    hintEl.textContent = '玩具球...已经回忆过了';
+                } else if (closestItem.id === 'remote' && remoteInteracted) {
+                    hintEl.textContent = '遥控器...已经回忆过了';
+                } else {
+                    hintEl.textContent = `按 E 键 与 ${closestItem.name} 互动`;
+                }
                 hintEl.classList.add('visible');
                 return closestItem;
             } else {
@@ -426,16 +836,29 @@
             }
         }
 
+        // 每帧自动检测提示（不依赖按键）
+        let currentClosestItem = null;
+        function updateInteractionHints() {
+            currentClosestItem = checkInteraction();
+        }
+
         // ==================== 第三人称控制 ====================
-        const keyState = { w: false, a: false, s: false, d: false };
+        const keyState = { w: false, a: false, s: false, d: false, space: false };
         const moveSpeed = 2.0;
         const playerDir = new THREE.Vector3();
+
+        // ==================== 跳跃系统 ====================
+        let velocityY = 0;
+        const gravity = -12;
+        const jumpForce = 4.5;
+        const groundY = 0;      // 地面高度
+        let isOnGround = true;
 
         let cameraYaw = Math.PI;
         let cameraPitch = 0.55;
         let cameraDistance = 3.5;
         const minDist = 2.0;
-        const maxDist = 8.0;
+        const maxDist = 3.5;
         const mouseSensitivity = 0.004;
         let isMouseDown = false;
         let isRightDown = false;
@@ -524,9 +947,15 @@
                 case 'KeyA': keyState.a = true; e.preventDefault(); break;
                 case 'KeyS': keyState.s = true; e.preventDefault(); break;
                 case 'KeyD': keyState.d = true; e.preventDefault(); break;
+                case 'Space':
+                    if (isOnGround) {
+                        velocityY = jumpForce;
+                        isOnGround = false;
+                    }
+                    e.preventDefault();
+                    break;
                 case 'KeyE':
-                    const item = checkInteraction();
-                    if (item) item.action();
+                    if (currentClosestItem) currentClosestItem.action();
                     e.preventDefault();
                     break;
             }
@@ -539,6 +968,33 @@
                 case 'KeyD': keyState.d = false; e.preventDefault(); break;
             }
         });
+
+        // 检测点 (px, pz) 与某个 collider 是否重叠（含玩家半径）
+        function resolveColliders(px, pz) {
+            let rx = px, rz = pz;
+            for (const c of colliders) {
+                const expandedMinX = c.minX - playerRadius;
+                const expandedMaxX = c.maxX + playerRadius;
+                const expandedMinZ = c.minZ - playerRadius;
+                const expandedMaxZ = c.maxZ + playerRadius;
+
+                if (rx > expandedMinX && rx < expandedMaxX &&
+                    rz > expandedMinZ && rz < expandedMaxZ) {
+                    // 计算从哪个轴推出穿透量最小
+                    const overlapLeft  = rx - expandedMinX;
+                    const overlapRight = expandedMaxX - rx;
+                    const overlapFront = rz - expandedMinZ;
+                    const overlapBack  = expandedMaxZ - rz;
+                    const minOverlap = Math.min(overlapLeft, overlapRight, overlapFront, overlapBack);
+
+                    if (minOverlap === overlapLeft)       rx = expandedMinX;
+                    else if (minOverlap === overlapRight) rx = expandedMaxX;
+                    else if (minOverlap === overlapFront) rz = expandedMinZ;
+                    else                                  rz = expandedMaxZ;
+                }
+            }
+            return { x: rx, z: rz };
+        }
 
         function updateMovement(dt) {
             const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw)).normalize();
@@ -554,20 +1010,75 @@
                 playerDir.normalize();
                 const move = playerDir.clone().multiplyScalar(moveSpeed * dt);
 
-                const newX = bulldogGroup.position.x + move.x;
-                const newZ = bulldogGroup.position.z + move.z;
+                // 先分轴移动，再各自做碰撞解算（防止角落卡死）
+                let newX = bulldogGroup.position.x + move.x;
+                let newZ = bulldogGroup.position.z + move.z;
 
-                const clampedX = Math.max(-4.2, Math.min(4.2, newX));
-                const clampedZ = Math.max(-4.2, Math.min(4.2, newZ));
+                // 世界边界（四面外墙内侧）
+                newX = Math.max(-4.2, Math.min(4.2, newX));
+                newZ = Math.max(-4.2, Math.min(4.2, newZ));
 
-                bulldogGroup.position.x = clampedX;
-                bulldogGroup.position.z = clampedZ;
+                // 碰撞解算：先只移动 X 轴
+                const afterX = resolveColliders(newX, bulldogGroup.position.z);
+                newX = afterX.x;
+                // 再只移动 Z 轴
+                const afterZ = resolveColliders(newX, newZ);
+                newZ = afterZ.z;
+
+                bulldogGroup.position.x = newX;
+                bulldogGroup.position.z = newZ;
 
                 const targetAngle = Math.atan2(move.x, move.z);
                 let angleDiff = targetAngle - bulldogGroup.rotation.y;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
                 bulldogGroup.rotation.y += angleDiff * Math.min(1, dt * 8);
+            }
+
+            // ---- 卫生间区域自动抬升（走到碰撞体上自动站到0.2m高）----
+            const BATHROOM_RISE_Y = 0.2;
+            const bathroomCX = 2.5, bathroomCZ = 1.65, bathroomHW = 1.5, bathroomHD = 1.5;
+            const inBathroomArea = bulldogGroup.position.x >= bathroomCX - bathroomHW - playerRadius &&
+                                     bulldogGroup.position.x <= bathroomCX + bathroomHW + playerRadius &&
+                                     bulldogGroup.position.z >= bathroomCZ - bathroomHD - playerRadius &&
+                                     bulldogGroup.position.z <= bathroomCZ + bathroomHD + playerRadius;
+
+            // ---- 跳跃 / 重力 / 平台 ----
+            const prevY = bulldogGroup.position.y;
+            velocityY += gravity * dt;
+            bulldogGroup.position.y += velocityY * dt;
+            const curY = bulldogGroup.position.y;
+
+            const px = bulldogGroup.position.x;
+            const pz = bulldogGroup.position.z;
+            let landedPlatformY = -Infinity;
+
+            for (const c of colliders) {
+                if (c.platformTop > -Infinity && c.platformTop >= groundY) {
+                    if (px >= c.minX - playerRadius && px <= c.maxX + playerRadius &&
+                        pz >= c.minZ - playerRadius && pz <= c.maxZ + playerRadius) {
+                        if (prevY >= c.platformTop && curY <= c.platformTop) {
+                            landedPlatformY = Math.max(landedPlatformY, c.platformTop);
+                        }
+                    }
+                }
+            }
+
+            if (landedPlatformY > -Infinity) {
+                bulldogGroup.position.y = landedPlatformY;
+                velocityY = 0;
+                isOnGround = true;
+            } else if (inBathroomArea && bulldogGroup.position.y < BATHROOM_RISE_Y) {
+                // 在卫生间碰撞体范围内且未跳起 → 抬升到0.2m
+                bulldogGroup.position.y = BATHROOM_RISE_Y;
+                velocityY = 0;
+                isOnGround = true;
+            } else if (bulldogGroup.position.y <= groundY) {
+                bulldogGroup.position.y = groundY;
+                velocityY = 0;
+                isOnGround = true;
+            } else {
+                isOnGround = false;
             }
         }
 
@@ -588,7 +1099,7 @@
 
             camX = Math.max(-4.0, Math.min(4.0, camX));
             camZ = Math.max(-4.0, Math.min(4.0, camZ));
-            camY = Math.max(0.3, Math.min(2.5, camY));
+            camY = Math.max(0.3, Math.min(4.0, camY)); // 上限提高以跟随跳跃
 
             camera.position.set(camX, camY, camZ);
             camera.lookAt(target);
@@ -611,22 +1122,38 @@
 
             updateMovement(dt);
             updateCamera();
+            updateInteractionHints();
+
+            // 实时位置显示
+            const posEl = document.getElementById('pos-display');
+            if (posEl) {
+                const p = bulldogGroup.position;
+                posEl.textContent = `X: ${p.x.toFixed(2)}  Z: ${p.z.toFixed(2)}  Y: ${p.y.toFixed(2)}`;
+            }
 
             const time = Date.now() * 0.001;
             const isMoving = keyState.w || keyState.a || keyState.s || keyState.d;
 
             if (bulldogGroup.children.length > 0 && bulldogGroup.children[0]) {
                 const model = bulldogGroup.children[0];
-                const groundY = 0.28;
+                const modelBaseY = 0.28; // 模型相对于 bulldogGroup 的基础 Y
 
-                if (isMoving) {
+                if (!isOnGround) {
+                    // 空中：通过 bulldogGroup 做轻微拉伸，不碰 model.scale
+                    model.position.y = modelBaseY;
+                    model.rotation.x = 0;
+                    model.rotation.z = 0;
+                    const stretchY = velocityY > 0 ? 1.08 : 0.92;
+                    bulldogGroup.scale.set(1 / stretchY, stretchY, 1 / stretchY);
+                } else if (isMoving) {
                     walkCycle += dt * 8;
                     const bounce = Math.abs(Math.sin(walkCycle)) * 0.03;
-                    model.position.y = groundY + bounce;
+                    model.position.y = modelBaseY + bounce;
+                    bulldogGroup.scale.set(1, 1, 1);
                     model.rotation.x = Math.sin(walkCycle) * 0.08;
                     model.rotation.z = Math.sin(walkCycle * 2) * 0.04;
                 } else {
-                    model.position.y += (groundY - model.position.y) * 0.1;
+                    model.position.y += (modelBaseY - model.position.y) * 0.1;
                     model.rotation.x += (0 - model.rotation.x) * 0.1;
                     model.rotation.z += (0 - model.rotation.z) * 0.1;
                     walkCycle = 0;
