@@ -644,33 +644,6 @@
         bulldogGroup.position.set(0, 0, 0);
         scene.add(bulldogGroup);
 
-        // ==================== 主人模型 ====================
-        const ownerGroup = new THREE.Group();
-        gltfLoader.load('zhuren.glb', (gltf) => {
-            const ownerModel = gltf.scene;
-            ownerModel.scale.set(1, 1, 1);
-            ownerModel.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-            // 计算实际包围盒并居中
-            const box = new THREE.Box3().setFromObject(ownerModel);
-            const cx = (box.min.x + box.max.x) / 2;
-            const cy = box.min.y;
-            const cz = (box.min.z + box.max.z) / 2;
-            console.log('👤 主人包围盒: center=(' + cx.toFixed(2) + ',' + cy.toFixed(2) + ',' + cz.toFixed(2) + '), size=' + (box.max.x-box.min.x).toFixed(2) + 'x' + (box.max.y-box.min.y).toFixed(2) + 'x' + (box.max.z-box.min.z).toFixed(2));
-            // 居中模型
-            ownerModel.position.set(-cx, -cy, -cz);
-            ownerGroup.add(ownerModel);
-            console.log('👤 主人模型加载成功！（已居中）');
-        }, undefined, (error) => {
-            console.error('❌ 主人模型加载失败:', error);
-        });
-        ownerGroup.position.set(0, 0, -2.5);
-        scene.add(ownerGroup);
-
         // ==================== 交互系统 ====================
         const hintEl = document.getElementById('interact-hint');
         const feedbackEl = document.getElementById('action-feedback');
@@ -769,15 +742,11 @@
             }
             animateBounce();
 
-            // 3秒后消失，然后跳转到篮球游戏
+            // 3秒后消失
             clearTimeout(flashbackBallTimeout);
             flashbackBallTimeout = setTimeout(() => {
                 flashbackBallOverlay.style.opacity = '0';
                 flashbackBallText.style.opacity = '0';
-                // 跳转到篮球游戏
-                setTimeout(() => {
-                    window.location.href = '/basketball_game.html';
-                }, 500);
             }, 3000);
 
             console.log('🏀 闪回效果触发：这个球是主人最常扔的…');

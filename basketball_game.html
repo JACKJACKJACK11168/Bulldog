@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小八和主人玩篮球</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; font-family: "Microsoft YaHei", sans-serif; background: #000; }
+        #game-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 10;
+        }
+        #sidebar {
+            position: absolute; top: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        .score-box {
+            background: rgba(0,0,0,0.65); color: #fff; padding: 8px 16px;
+            border-radius: 10px; font-size: 13px;
+            border: 1px solid rgba(255,255,255,0.2);
+            text-align: center; min-width: 80px;
+        }
+        .score-box .label { font-size: 10px; opacity: 0.6; }
+        .score-box .value { font-size: 24px; color: #f1c40f; }
+        .score-box.success { border-color: #2ecc71; }
+        #speech-bubble {
+            position: absolute;
+            background: rgba(255,255,255,0.92); color: #333;
+            padding: 8px 16px; border-radius: 18px;
+            font-size: 13px; max-width: 200px; text-align: center;
+            opacity: 0; transition: opacity 0.3s;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            pointer-events: none; white-space: nowrap;
+        }
+        #speech-bubble.show { opacity: 1; }
+        #speech-bubble::after {
+            content: '';
+            position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%);
+            width: 0; height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-top: 7px solid rgba(255,255,255,0.92);
+        }
+        #hint {
+            position: absolute; bottom: 20px; right: 20px;
+            color: rgba(255,255,255,0.55); font-size: 11px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-ui">
+        <div id="sidebar">
+            <div class="score-box" id="score-box">
+                <div class="label">连续传球</div>
+                <div class="value" id="score-display">0 / 5</div>
+            </div>
+            <div class="score-box" id="best-box">
+                <div class="label">最佳纪录</div>
+                <div class="value" id="best-display">0</div>
+            </div>
+        </div>
+        <div id="speech-bubble"></div>
+        <div id="hint">WASD 控制小八移动</div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+        // ==================== 场景初始化 ====================
+        const scene = new THREE.Scene();
+
+        // 天空渐变
+        const skyGeo = new THREE.SphereGeometry(40, 32, 32);
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor: { value: new THREE.Color(0x4da6ff) },
+                bottomColor: { value: new THREE.Color(0xc8e6ff) },
+            },
+            vertexShader: `
+                varying vec3 vWorldPos;
+                void main() {
+                    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+                    vWorldPos = worldPos.xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 topColor;
+                uniform vec3 bottomColor;
+                varying vec3 vWorldPos;
+                void main() {
+                    float h = normalize(vWorldPos).y;
+                    float t = smoothstep(-0.1, 0.6, h);
+                    gl_FragColor = vec4(mix(bottomColor, topColor, t), 1.0);
+                }
+            `,
+            side: THREE.BackSide,
+        });
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        scene.add(sky);
+
+        scene.fog = new THREE.Fog(0xc8e6ff, 15, 60);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.5, 80);
+        camera.position.set(8, 10, 14);
+        camera.lookAt(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.1;
+        document.body.appendChild(renderer.domElement);
+
+        // ==================== 灯光 ====================
+        const ambientLight = new THREE.AmbientLight(0xfff5e6, 0.7);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x6b8a3a, 0.6);
+        scene.add(hemiLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfff8e0, 1.5);
+        sunLight.position.set(10, 18, 5);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 60;
+        sunLight.shadow.camera.left = -20;
+        sunLight.shadow.camera.right = 20;
+        sunLight.shadow.camera.top = 20;
+        sunLight.shadow.camera.bottom = -20;
+        sunLight.shadow.bias = -0.0001;
+        scene.add(sunLight);
+
+        // ==================== 地面 ====================
+        // 草地
+        const groundGeo = new THREE.PlaneGeometry(30, 30);
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0x5a8a3c, roughness: 0.9, metalness: 0,
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // 花园小径（土色区域）
+        const pathGeo = new THREE.CircleGeometry(8, 48);
+        const pathMat = new THREE.MeshStandardMaterial({ color: 0xc4a46c, roughness: 0.85 });
+        const path = new THREE.Mesh(pathGeo, pathMat);
+        path.rotation.x = -Math.PI / 2;
+        path.position.y = 0.01;
+        path.receiveShadow = true;
+        scene.add(path);
+
+        // 草地纹理点缀
+        for (let i = 0; i < 200; i++) {
+            const x = (Math.random() - 0.5) * 26;
+            const z = (Math.random() - 0.5) * 26;
+            if (Math.sqrt(x * x + z * z) < 8) continue;
+            const bladeGeo = new THREE.ConeGeometry(0.05, 0.2 + Math.random() * 0.3, 4);
+            const bladeMat = new THREE.MeshStandardMaterial({
+                color: new THREE.Color().setHSL(0.22 + Math.random() * 0.08, 0.7, 0.25 + Math.random() * 0.2),
+                roughness: 0.8,
+            });
+            const blade = new THREE.Mesh(bladeGeo, bladeMat);
+            blade.position.set(x, 0.08, z);
+            blade.rotation.z = (Math.random() - 0.5) * 0.3;
+            blade.rotation.x = (Math.random() - 0.5) * 0.3;
+            blade.castShadow = true;
+            blade.receiveShadow = true;
+            scene.add(blade);
+        }
+
+        // ==================== 围栏 ====================
+        function createFencePost(x, z) {
+            const postGeo = new THREE.CylinderGeometry(0.08, 0.1, 1.4, 8);
+            const postMat = new THREE.MeshStandardMaterial({ color: 0x8B6914, roughness: 0.6 });
+            const post = new THREE.Mesh(postGeo, postMat);
+            post.position.set(x, 0.7, z);
+            post.castShadow = true;
+            post.receiveShadow = true;
+            scene.add(post);
+
+            // 顶部尖角
+            const tipGeo = new THREE.ConeGeometry(0.1, 0.2, 8);
+            const tip = new THREE.Mesh(tipGeo, postMat);
+            tip.position.set(x, 1.5, z);
+            tip.castShadow = true;
+            scene.add(tip);
+        }
+
+        function createFenceRail(x1, z1, x2, z2, y) {
+            const dx = x2 - x1, dz = z2 - z1;
+            const length = Math.sqrt(dx * dx + dz * dz);
+            const angle = Math.atan2(dx, dz);
+            const railGeo = new THREE.BoxGeometry(0.05, 0.06, length);
+            const railMat = new THREE.MeshStandardMaterial({ color: 0xA0722A, roughness: 0.55 });
+            const rail = new THREE.Mesh(railGeo, railMat);
+            rail.position.set((x1 + x2) / 2, y, (z1 + z2) / 2);
+            rail.rotation.y = angle;
+            rail.castShadow = true;
+            rail.receiveShadow = true;
+            scene.add(rail);
+        }
+
+        // 围栏: 12m x 12m
+        const fenceHalf = 6;
+        const postSpacing = 0.8;
+        for (let i = -fenceHalf; i <= fenceHalf; i += postSpacing) {
+            createFencePost(i, -fenceHalf);
+            createFencePost(i, fenceHalf);
+            createFencePost(-fenceHalf, i);
+            createFencePost(fenceHalf, i);
+        }
+        // 围栏横梁
+        for (let i = -fenceHalf; i < fenceHalf; i += postSpacing) {
+            createFenceRail(i, -fenceHalf, i + postSpacing, -fenceHalf, 0.5);
+            createFenceRail(i, -fenceHalf, i + postSpacing, -fenceHalf, 1.0);
+            createFenceRail(i, fenceHalf, i + postSpacing, fenceHalf, 0.5);
+            createFenceRail(i, fenceHalf, i + postSpacing, fenceHalf, 1.0);
+            createFenceRail(-fenceHalf, i, -fenceHalf, i + postSpacing, 0.5);
+            createFenceRail(-fenceHalf, i, -fenceHalf, i + postSpacing, 1.0);
+            createFenceRail(fenceHalf, i, fenceHalf, i + postSpacing, 0.5);
+            createFenceRail(fenceHalf, i, fenceHalf, i + postSpacing, 1.0);
+        }
+
+        // ==================== 树木 ====================
+        function createTree(x, z) {
+            const treeGroup = new THREE.Group();
+
+            // 树干
+            const trunkGeo = new THREE.CylinderGeometry(0.15, 0.22, 1.8, 8);
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6B4226, roughness: 0.8 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.y = 0.9;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            treeGroup.add(trunk);
+
+            // 树冠（多层球）
+            const leafColors = [0x3d7a28, 0x4a8c32, 0x55993a];
+            for (let i = 0; i < 3; i++) {
+                const crownGeo = new THREE.SphereGeometry(0.7 + i * 0.2, 8, 6);
+                const crownMat = new THREE.MeshStandardMaterial({
+                    color: leafColors[i], roughness: 0.7,
+                });
+                const crown = new THREE.Mesh(crownGeo, crownMat);
+                crown.position.y = 1.6 + i * 0.35;
+                crown.position.x = (Math.random() - 0.5) * 0.4;
+                crown.position.z = (Math.random() - 0.5) * 0.4;
+                crown.castShadow = true;
+                crown.receiveShadow = true;
+                treeGroup.add(crown);
+            }
+
+            treeGroup.position.set(x, 0, z);
+            const scale = 0.8 + Math.random() * 0.6;
+            treeGroup.scale.set(scale, scale, scale);
+            scene.add(treeGroup);
+            return treeGroup;
+        }
+
+        // 花园外的树
+        const treePositions = [];
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.3;
+            const dist = 7 + Math.random() * 3;
+            const tx = Math.cos(angle) * dist;
+            const tz = Math.sin(angle) * dist;
+            treePositions.push({ x: tx, z: tz });
+            createTree(tx, tz);
+        }
+
+        // ==================== 花丛 ====================
+        function createFlowerPatch(x, z) {
+            const group = new THREE.Group();
+            const colors = [0xff6b6b, 0xffd93d, 0xff9ff3, 0xfeca57, 0xff6348, 0xa29bfe];
+
+            for (let i = 0; i < 5; i++) {
+                const stemGeo = new THREE.CylinderGeometry(0.02, 0.025, 0.4, 6);
+                const stem = new THREE.Mesh(stemGeo, new THREE.MeshStandardMaterial({ color: 0x4a8c32 }));
+                stem.position.set((Math.random() - 0.5) * 1.2, 0.2, (Math.random() - 0.5) * 1.2);
+                group.add(stem);
+
+                const petalGeo = new THREE.SphereGeometry(0.1, 6, 4);
+                const petal = new THREE.Mesh(petalGeo, new THREE.MeshStandardMaterial({
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    roughness: 0.5,
+                }));
+                petal.position.copy(stem.position);
+                petal.position.y += 0.22;
+                group.add(petal);
+            }
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            return group;
+        }
+
+        // 花园内部花丛
+        for (let i = 0; i < 6; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 4 + Math.random() * 3;
+            createFlowerPatch(Math.cos(angle) * dist, Math.sin(angle) * dist);
+        }
+
+        // ==================== 主人模型（GLB加载） ====================
+        const ownerGroup = new THREE.Group();
+        // rightHand作为ownerGroup的直接子级，固定跟随主人
+        let rightHand = new THREE.Mesh(new THREE.SphereGeometry(0.05,4,4), new THREE.MeshBasicMaterial({visible:false}));
+        rightHand.position.set(0.3, 1.4, 0.2);
+        ownerGroup.add(rightHand);
+        const gltfLoader2 = new GLTFLoader();
+        gltfLoader2.load('basketballzhuren.glb', (gltf) => {
+            const m = gltf.scene;
+            m.scale.set(1.6,1.6,1.6);
+            m.traverse((ch) => { if(ch.isMesh){ch.castShadow=true;ch.receiveShadow=true;} });
+            // 居中模型
+            const box = new THREE.Box3().setFromObject(m);
+            m.position.set(-(box.min.x+box.max.x)/2, -box.min.y, -(box.min.z+box.max.z)/2);
+            ownerGroup.add(m);
+            console.log('👤 主人模型加载成功！');
+        }, undefined, (e) => { console.error('主人加载失败:',e); });
+        ownerGroup.position.set(0, 0, -5);
+        scene.add(ownerGroup);
+
+        // ==================== 篮球 ====================
+        const ballGroup = new THREE.Group();
+        const ballGeo = new THREE.SphereGeometry(0.2, 24, 24);
+        const ballMat = new THREE.MeshStandardMaterial({
+            color: 0xe67e22, roughness: 0.3, metalness: 0.05,
+        });
+        const ball = new THREE.Mesh(ballGeo, ballMat);
+        ball.castShadow = true;
+        ballGroup.add(ball);
+
+        // 篮球纹路
+        const lineMat2 = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4 });
+        // 水平线
+        const hLineGeo = new THREE.TorusGeometry(0.21, 0.012, 8, 32);
+        const hLine = new THREE.Mesh(hLineGeo, lineMat2);
+        hLine.rotation.x = Math.PI / 2;
+        ballGroup.add(hLine);
+        // 垂直线
+        const vLine1 = new THREE.Mesh(hLineGeo, lineMat2);
+        vLine1.rotation.z = Math.PI / 2;
+        ballGroup.add(vLine1);
+        const vLine2 = new THREE.Mesh(hLineGeo, lineMat2);
+        vLine2.rotation.z = Math.PI / 2;
+        vLine2.rotation.y = Math.PI / 2;
+        ballGroup.add(vLine2);
+
+        ballGroup.position.set(0, 1.3, -4.5);
+        ballGroup.userData = {
+            velocity: new THREE.Vector3(),
+            isFlying: false,
+            isHeldByOwner: true,
+            isHeldByDog: false,
+            targetPos: new THREE.Vector3(),
+            flyTime: 0,
+            flyDuration: 0,
+            startPos: new THREE.Vector3(),
+        };
+        scene.add(ballGroup);
+
+        // 篮球阴影圆盘
+        const shadowGeo = new THREE.CircleGeometry(0.22, 16);
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3 });
+        const ballShadow = new THREE.Mesh(shadowGeo, shadowMat);
+        ballShadow.rotation.x = -Math.PI / 2;
+        ballShadow.position.y = 0.02;
+        ballShadow.name = 'ballShadow';
+        scene.add(ballShadow);
+
+        // ==================== 法斗模型 ====================
+        const dogGroup = new THREE.Group();
+        let dogModel = null;
+
+        const gltfLoader = new GLTFLoader();
+        gltfLoader.load('french_dog.glb', (gltf) => {
+            dogModel = gltf.scene;
+            dogModel.scale.set(0.1, 0.1, 0.1);
+            dogModel.position.y = 0.55;
+            const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+            dogModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    if (child.material) {
+                        const mats = Array.isArray(child.material) ? child.material : [child.material];
+                        mats.forEach(mat => {
+                            if (mat.map) {
+                                mat.map.anisotropy = maxAnisotropy;
+                                mat.map.minFilter = THREE.LinearMipmapLinearFilter;
+                                mat.map.magFilter = THREE.LinearFilter;
+                                mat.map.colorSpace = THREE.SRGBColorSpace;
+                            }
+                            mat.needsUpdate = true;
+                        });
+                    }
+                }
+            });
+            dogGroup.add(dogModel);
+            console.log('✅ 法斗加载成功！');
+        }, (progress) => {
+            console.log('🐶 加载中...', progress);
+        }, (error) => {
+            console.error('❌ 法斗加载失败:', error);
+            // 尝试用绝对路径重试
+            const gltfLoader2 = new GLTFLoader();
+            gltfLoader2.load('./french_dog.glb', (gltf) => {
+                dogModel = gltf.scene;
+                dogModel.scale.set(0.1, 0.1, 0.1);
+                dogModel.position.y = 0.55;
+                dogModel.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                dogGroup.add(dogModel);
+                console.log('✅ 法斗加载成功！（重试）');
+            }, undefined, (err2) => {
+                console.error('❌ 法斗加载再次失败:', err2);
+            });
+        });
+        dogGroup.position.set(2, 0, -2);
+        scene.add(dogGroup);
+
+        // ==================== 游戏状态 ====================
+        const gameState = {
+            score: 0,
+            bestScore: 0,
+            phase: 'idle', // idle | ownerThrow | dogCatch | dogReturn | win
+            ownerThrowTarget: new THREE.Vector3(),
+            canInteract: true,
+        };
+
+        // ==================== 相机控制（第三人称跟随） ====================
+        let cameraYaw = -Math.PI / 3, cameraPitch = 0.55, cameraDistance = 6;
+        const minDist = 3, maxDist = 10, mouseSensitivity = 0.004;
+        let isMouseDown = false, isRightDown = false, lastMouseX = 0, lastMouseY = 0;
+        const smoothFactor = 0.12;
+        let smoothYaw = cameraYaw, smoothPitch = cameraPitch, smoothDist = cameraDistance;
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (e.button === 0) { isMouseDown = true; lastMouseX = e.pageX; lastMouseY = e.pageY; }
+            if (e.button === 2) { isRightDown = true; lastMouseX = e.pageX; lastMouseY = e.pageY; }
+        });
+        renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+        window.addEventListener('mouseup', () => { isMouseDown = false; isRightDown = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (!isMouseDown && !isRightDown) return;
+            const dx = e.pageX - lastMouseX, dy = e.pageY - lastMouseY;
+            lastMouseX = e.pageX; lastMouseY = e.pageY;
+            if (isMouseDown) {
+                cameraYaw -= dx * mouseSensitivity;
+                cameraPitch -= dy * mouseSensitivity;
+                cameraPitch = Math.max(0.15, Math.min(Math.PI / 2 - 0.1, cameraPitch));
+            }
+            if (isRightDown) { cameraDistance += dy * 0.01; cameraDistance = Math.max(minDist, Math.min(maxDist, cameraDistance)); }
+        });
+        renderer.domElement.addEventListener('wheel', (e) => {
+            cameraDistance += e.deltaY * 0.01; cameraDistance = Math.max(minDist, Math.min(maxDist, cameraDistance)); e.preventDefault();
+        }, { passive: false });
+        function updateCamera() {
+            smoothYaw += (cameraYaw - smoothYaw) * smoothFactor;
+            smoothPitch += (cameraPitch - smoothPitch) * smoothFactor;
+            smoothDist += (cameraDistance - smoothDist) * smoothFactor;
+            const target = new THREE.Vector3(dogGroup.position.x, dogGroup.position.y + 0.5, dogGroup.position.z);
+            const cx = target.x + smoothDist * Math.sin(smoothYaw) * Math.cos(smoothPitch);
+            const cy = target.y + smoothDist * Math.sin(smoothPitch);
+            const cz = target.z + smoothDist * Math.cos(smoothYaw) * Math.cos(smoothPitch);
+            camera.position.set(cx, Math.max(1, cy), cz);
+            camera.lookAt(target);
+        }
+
+        // ==================== WASD 控制法斗移动 ====================
+        const keyState = { w: false, a: false, s: false, d: false };
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (key in keyState) {
+                keyState[key] = true;
+                e.preventDefault();
+
+                // 如果游戏还没开始，自动开始
+                if (gameState.phase === 'idle') {
+                    startGame();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (key in keyState) {
+                keyState[key] = false;
+                e.preventDefault();
+            }
+        });
+
+        // ==================== 游戏逻辑 ====================
+        const speechBubbleEl = document.getElementById('speech-bubble');
+        const scoreDisplay = document.getElementById('score-display');
+        const bestDisplay = document.getElementById('best-display');
+        const scoreBox = document.getElementById('score-box');
+
+        let speechTimer = 0;
+
+        function showSpeech(text, duration = 2000) {
+            speechBubbleEl.textContent = text;
+            speechBubbleEl.classList.add('show');
+            speechTimer = duration;
+            updateSpeechPosition();
+        }
+
+        function updateSpeechPosition() {
+            // 将主人头顶的3D坐标投影到屏幕
+            const headPos = new THREE.Vector3(0, 2.15, 0);
+            ownerGroup.localToWorld(headPos);
+            headPos.project(camera);
+            const x = (headPos.x * 0.5 + 0.5) * window.innerWidth;
+            const y = (-headPos.y * 0.5 + 0.5) * window.innerHeight;
+            speechBubbleEl.style.left = x + 'px';
+            speechBubbleEl.style.top = y + 'px';
+            speechBubbleEl.style.transform = 'translate(-50%, -100%)';
+        }
+
+        function hideSpeech() {
+            speechBubbleEl.classList.remove('show');
+        }
+
+        function updateScore() {
+            scoreDisplay.textContent = `${gameState.score} / 5`;
+            if (gameState.score >= 5) {
+                scoreBox.classList.add('success');
+            } else {
+                scoreBox.classList.remove('success');
+            }
+            if (gameState.score > gameState.bestScore) {
+                gameState.bestScore = gameState.score;
+            }
+            bestDisplay.textContent = gameState.bestScore;
+        }
+
+        function startGame() {
+            gameState.score = 0;
+            gameState.phase = 'ownerThrow';
+            gameState.canInteract = true;
+            updateScore();
+            scoreBox.classList.remove('success');
+            showSpeech('接住球！WASD控制小八去接球！', 3000);
+            ownerThrowBall();
+        }
+
+        function ownerThrowBall() {
+            if (gameState.phase !== 'ownerThrow') return;
+            gameState.canInteract = true;
+
+            // 主人投球到花园中随机位置
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 2 + Math.random() * 3;
+            const tx = Math.cos(angle) * dist;
+            const tz = Math.sin(angle) * dist;
+
+            gameState.ownerThrowTarget.set(tx, 0, tz);
+
+            // 动画：球从主人手中飞出
+            const ballData = ballGroup.userData;
+            const ownerHandPos = new THREE.Vector3();
+            rightHand.getWorldPosition(ownerHandPos);  // rightHand 仍然在 rightUpperArm 下
+
+            ballData.startPos.copy(ownerHandPos);
+            ballData.targetPos.set(tx, 0, tz);
+            ballData.flyTime = 0;
+            ballData.flyDuration = 1.2;
+            ballData.isFlying = true;
+            ballData.isHeldByOwner = false;
+
+            // 主人投球动画
+            animateOwnerThrow();
+
+            showSpeech('小八，接住！', 1500);
+
+            // 设置超时：如果狗没接到
+            setTimeout(() => {
+                if (gameState.phase === 'ownerThrow') {
+                    // 球落地
+                    ballData.isFlying = false;
+                    ballGroup.position.set(tx, 0.2, tz);
+                    showSpeech('球掉了，快去捡回来！', 2000);
+                }
+            }, 2000);
+        }
+
+        function animateOwnerThrow() {
+            const startTime = performance.now();
+            const duration = 700;
+            const ox = ownerGroup.rotation.x;
+            function animStep(now) {
+                const t = Math.min((now - startTime) / duration, 1);
+                if (t < 0.35) { const s = Math.sin((t/0.35)*Math.PI*0.5); ownerGroup.rotation.x = ox - s*0.25; }
+                else if (t < 0.65) { const e = (t-0.35)/0.3, s = 1-Math.cos(e*Math.PI*0.5); ownerGroup.rotation.x = ox-0.25+s*0.5; }
+                else { const e = (t-0.65)/0.35, s = 1-Math.pow(1-e,2); ownerGroup.rotation.x = ox+0.25*(1-s); }
+                if (t < 1) requestAnimationFrame(animStep); else ownerGroup.rotation.x = ox;
+            }
+            requestAnimationFrame(animStep);
+        }
+
+        // ==================== 爱心特效 ====================
+        const hearts = [];
+
+        function spawnHearts(position) {
+            const heartGroup = new THREE.Group();
+            const heartColor = 0xff1493;
+            const heartMat = new THREE.MeshBasicMaterial({ color: heartColor, transparent: true, opacity: 1 });
+
+            // 用两个球体 + 一个锥体模拟爱心形状
+            for (let i = 0; i < 5; i++) {
+                const h = new THREE.Group();
+
+                // 左半球
+                const leftGeo = new THREE.SphereGeometry(0.08, 8, 8);
+                const left = new THREE.Mesh(leftGeo, heartMat.clone());
+                left.position.set(-0.05, 0.02, 0);
+                left.scale.set(0.9, 0.9, 0.6);
+                h.add(left);
+
+                // 右半球
+                const right = new THREE.Mesh(leftGeo, heartMat.clone());
+                right.position.set(0.05, 0.02, 0);
+                right.scale.set(0.9, 0.9, 0.6);
+                h.add(right);
+
+                // 底部锥形
+                const coneGeo = new THREE.ConeGeometry(0.09, 0.1, 6);
+                const cone = new THREE.Mesh(coneGeo, heartMat.clone());
+                cone.position.y = -0.06;
+                cone.rotation.z = Math.PI;
+                h.add(cone);
+
+                const scale = 0.5 + Math.random() * 0.7;
+                h.scale.set(scale, scale, scale);
+                h.position.set(
+                    (Math.random() - 0.5) * 0.6,
+                    0.6 + Math.random() * 0.3,
+                    (Math.random() - 0.5) * 0.6
+                );
+                h.rotation.z = (Math.random() - 0.5) * 0.5;
+
+                heartGroup.add(h);
+            }
+
+            heartGroup.position.copy(position);
+            heartGroup.position.y += 1.0;
+            scene.add(heartGroup);
+
+            hearts.push({
+                group: heartGroup,
+                startTime: performance.now(),
+                duration: 2000,
+            });
+        }
+
+        function updateHearts() {
+            const now = performance.now();
+            for (let i = hearts.length - 1; i >= 0; i--) {
+                const h = hearts[i];
+                const elapsed = (now - h.startTime) / 1000;
+                const t = elapsed / (h.duration / 1000);
+
+                if (t >= 1) {
+                    scene.remove(h.group);
+                    hearts.splice(i, 1);
+                    continue;
+                }
+
+                // 爱心向上飘 + 旋转 + 淡出
+                h.group.position.y += 0.02;
+                h.group.rotation.y += 0.03;
+                h.group.children.forEach(child => {
+                    child.traverse(c => {
+                        if (c.material && c.material.transparent) {
+                            c.material.opacity = 1 - t;
+                        }
+                    });
+                });
+            }
+        }
+
+        function dogCatchesBall() {
+            if (gameState.phase !== 'ownerThrow') return;
+
+            const dogPos = dogGroup.position;
+            const ballPos = ballGroup.position;
+            const dist = new THREE.Vector2(dogPos.x - ballPos.x, dogPos.z - ballPos.z).length();
+
+            if (dist < 0.8 && !ballGroup.userData.isFlying) {
+                gameState.phase = 'dogCatch';
+                gameState.canInteract = true;
+
+                ballGroup.userData.isHeldByDog = true;
+                showSpeech('接得好！快传回来！', 2500);
+
+                // 球粘在狗身上
+                updateBallPosition();
+            }
+        }
+
+        function dogReturnsBall() {
+            if (gameState.phase !== 'dogCatch') return;
+
+            const dogPos = dogGroup.position;
+            const ownerPos = ownerGroup.position;
+            const dist = new THREE.Vector2(dogPos.x - ownerPos.x, dogPos.z - ownerPos.z).length();
+
+            if (dist < 1.5) {
+                gameState.phase = 'dogReturn';
+                gameState.canInteract = false;
+
+                // 球飞回主人
+                const ballData = ballGroup.userData;
+                ballData.isHeldByDog = false;
+                ballData.startPos.copy(ballGroup.position);
+                const ownerHandPos = new THREE.Vector3();
+                rightHand.getWorldPosition(ownerHandPos);
+                ballData.targetPos.copy(ownerHandPos);
+                ballData.flyTime = 0;
+                ballData.flyDuration = 0.8;
+                ballData.isFlying = true;
+
+                // 法斗头顶冒爱心
+                spawnHearts(dogGroup.position);
+
+                // 显示夸奖气泡（在主人头上）
+                const praises = ['好孩子！', '真棒小八！', '太厉害了！', '乖狗狗！', '好球！', '厉害！'];
+                const praise = praises[Math.floor(Math.random() * praises.length)];
+                showSpeech(praise, 1800);
+
+                setTimeout(() => {
+                    ballData.isFlying = false;
+                    ballData.isHeldByOwner = true;
+                    ballGroup.position.copy(ownerHandPos);
+
+                    gameState.score++;
+                    updateScore();
+
+                    if (gameState.score >= 5) {
+                        winGame();
+                    } else {
+                        gameState.phase = 'ownerThrow';
+                        gameState.canInteract = true;
+                        showSpeech(`${gameState.score}/5！再来一次！`, 2000);
+                        setTimeout(() => ownerThrowBall(), 1500);
+                    }
+                }, 1800);
+            }
+        }
+
+        function winGame() {
+            gameState.phase = 'win';
+            gameState.canInteract = false;
+            scoreBox.classList.add('success');
+            showSpeech('太棒了小八！你做到了！', 5000);
+
+            // 庆祝动画
+            const startTime = performance.now();
+            function celebrate(now) {
+                const elapsed = (now - startTime) / 1000;
+                if (elapsed < 5) {
+                    const bounce = Math.abs(Math.sin(elapsed * 6)) * 0.5;
+                    dogGroup.position.y = bounce;
+                    ownerGroup.position.y = bounce * 0.3;
+                    requestAnimationFrame(celebrate);
+                } else {
+                    dogGroup.position.y = 0;
+                    ownerGroup.position.y = 0;
+                    // 跳回房间
+                    showSpeech('回家咯！', 2000);
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 2000);
+                }
+            }
+            requestAnimationFrame(celebrate);
+        }
+
+        function resetGame() {
+            gameState.score = 0;
+            gameState.phase = 'idle';
+            gameState.canInteract = true;
+            updateScore();
+            scoreBox.classList.remove('success');
+            hideSpeech();
+            ballGroup.userData.isHeldByOwner = true;
+            ballGroup.userData.isFlying = false;
+
+            const ownerHandPos = new THREE.Vector3();
+            rightHand.getWorldPosition(ownerHandPos);
+            ballGroup.position.copy(ownerHandPos);
+
+            showSpeech('按WASD开始新游戏吧！', 3000);
+        }
+
+        function checkFail() {
+            // 如果球落地超过5秒狗还没接到，重新开始
+            // 简化：不做自动失败，由用户自己控制
+        }
+
+        function updateBallPosition() {
+            if (ballGroup.userData.isHeldByDog && dogModel) {
+                const dogWorldPos = new THREE.Vector3();
+                dogGroup.getWorldPosition(dogWorldPos);
+                ballGroup.position.set(dogWorldPos.x, dogWorldPos.y + 0.5, dogWorldPos.z + 0.3);
+            }
+            if (ballGroup.userData.isHeldByOwner) {
+                const handPos = new THREE.Vector3();
+                rightHand.getWorldPosition(handPos);
+                ballGroup.position.copy(handPos);
+            }
+        }
+
+        function updateBallShadow() {
+            ballShadow.position.x = ballGroup.position.x;
+            ballShadow.position.z = ballGroup.position.z;
+            ballShadow.position.y = 0.02;
+            const height = ballGroup.position.y;
+            const opacity = Math.max(0, 0.3 - height * 0.05);
+            shadowMat.opacity = opacity;
+            const scale = 1 + height * 0.1;
+            ballShadow.scale.set(scale, scale, scale);
+        }
+
+        // ==================== 狗WASD移动 ====================
+        let walkCycle = 0;
+        const dogSpeed = 4.5;
+
+        function updateDogMovement(dt) {
+            let moveX = 0, moveZ = 0;
+
+            const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw)).normalize();
+            const right = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw)).normalize();
+            if (keyState.w) { moveX += forward.x; moveZ += forward.z; }
+            if (keyState.s) { moveX -= forward.x; moveZ -= forward.z; }
+            if (keyState.a) { moveX -= right.x; moveZ -= right.z; }
+            if (keyState.d) { moveX += right.x; moveZ += right.z; }
+
+            const inputLen = Math.sqrt(moveX * moveX + moveZ * moveZ);
+            if (inputLen > 0.01) {
+                // 归一化方向
+                const dirX = moveX / inputLen;
+                const dirZ = moveZ / inputLen;
+                const moveDist = dogSpeed * dt;
+
+                dogGroup.position.x += dirX * moveDist;
+                dogGroup.position.z += dirZ * moveDist;
+
+                // 限制在围栏内
+                dogGroup.position.x = Math.max(-5.5, Math.min(5.5, dogGroup.position.x));
+                dogGroup.position.z = Math.max(-5.5, Math.min(5.5, dogGroup.position.z));
+
+                // 旋转朝向移动方向
+                const targetAngle = Math.atan2(dirX, dirZ);
+                let diff = targetAngle - dogGroup.rotation.y;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                dogGroup.rotation.y += diff * Math.min(1, dt * 12);
+
+                // 走路动画
+                walkCycle += dt * 10;
+                const bounce = 0.55 + Math.abs(Math.sin(walkCycle)) * 0.12;
+                if (dogModel) dogModel.position.y = bounce;
+
+                return true;
+            } else {
+                walkCycle = 0;
+                if (dogModel) dogModel.position.y += (0.55 - dogModel.position.y) * 0.1;
+                return false;
+            }
+        }
+
+        // ==================== 动画循环 ====================
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+
+            updateCamera();
+
+            // 气泡位置跟随主人
+            if (speechTimer > 0) {
+                updateSpeechPosition();
+                speechTimer -= dt * 1000;
+                if (speechTimer <= 0) hideSpeech();
+            }
+
+            // 球飞行动画
+            const ballData = ballGroup.userData;
+            if (ballData.isFlying) {
+                ballData.flyTime += dt;
+                const t = Math.min(ballData.flyTime / ballData.flyDuration, 1.0);
+                // 抛物线
+                const ease = t;
+                const arcHeight = 1.5 * Math.sin(t * Math.PI);
+                ballGroup.position.lerpVectors(ballData.startPos, ballData.targetPos, ease);
+                ballGroup.position.y += arcHeight;
+                ballGroup.rotation.x += dt * 8;
+                ballGroup.rotation.z += dt * 5;
+            } else {
+                updateBallPosition();
+            }
+            updateBallShadow();
+
+            // 狗移动
+            const isDogMoving = updateDogMovement(dt);
+
+            // 主人始终面向狗
+            const dogPos2D = new THREE.Vector2(dogGroup.position.x, dogGroup.position.z);
+            const ownerPos2D = new THREE.Vector2(ownerGroup.position.x, ownerGroup.position.z);
+            const lookAngle = Math.atan2(dogPos2D.x - ownerPos2D.x, dogPos2D.y - ownerPos2D.y);
+            ownerGroup.rotation.y += (lookAngle - ownerGroup.rotation.y) * 0.05;
+
+            // 呼吸动画（静止时）
+            if (!isDogMoving && dogModel) {
+                const breathe = 0.1 + Math.sin(performance.now() * 0.003) * 0.008;
+                dogModel.scale.set(breathe, breathe, breathe);
+            }
+
+            // 游戏逻辑检查
+            if (gameState.phase === 'ownerThrow') {
+                dogCatchesBall();
+            }
+            if (gameState.phase === 'dogCatch') {
+                dogReturnsBall();
+            }
+
+            // 球落地后如果一直没接，过5秒自动提示
+            if (gameState.phase === 'ownerThrow' && !ballData.isFlying && !ballData.isHeldByOwner && !ballData.isHeldByDog) {
+                // 不做自动重置，等用户点击
+            }
+
+            // 爱心特效更新
+            updateHearts();
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 响应窗口大小变化
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        console.log('法斗篮球游戏已就绪！');
+        console.log('规则：WASD控制法斗跑过去接球，接住后跑到主人身边传回去');
+        console.log('连续完成5次传球即可获胜！');
+    </script>
+</body>
+</html>
