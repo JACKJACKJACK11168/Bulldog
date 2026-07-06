@@ -401,10 +401,10 @@
         const bedroomOffsetX = 0.85; // 卧室往客厅方向微调
         const kitchenOffsetZ = 0.5;  // 厨房往卧室方向微调
         const bathroomOffsetZ = 0.35; // 卫生间往客厅方向微调
-        loadRoom('bedroom.glb',   0.5, -spacingX + bedroomOffsetX, -spacingZ, 0,              '卧室');
-        loadObjRoom('livingroom.obj', 'livingroom.mtl', 0.5, spacingX, -spacingZ, -Math.PI/2, '客厅');
-        loadRoom('kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房', false);
-        loadRoom('bathroom.glb',  0.5,  spacingX,  spacingZ - bathroomOffsetZ, Math.PI,       '卫生间');
+        loadRoom('rooms/bedroom.glb',   0.5, -spacingX + bedroomOffsetX, -spacingZ, 0,              '卧室');
+        loadObjRoom('rooms/livingroom.obj', 'rooms/livingroom.mtl', 0.5, spacingX, -spacingZ, -Math.PI/2, '客厅');
+        loadRoom('rooms/kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房', false);
+        loadRoom('rooms/bathroom.glb',  0.5,  spacingX,  spacingZ - bathroomOffsetZ, Math.PI,       '卫生间');
 
         // 过渡墙体：厨房与卫生间之间的浅棕色连接墙
         const wallStartX = -spacingX + 1.5;
@@ -423,7 +423,7 @@
         console.log('🧱 厨房-卫生间过渡墙已创建');
 
         // 过渡墙前面的装饰模型（摇篮椅）
-        gltfLoader.load('transition_deco.glb', (gltf) => {
+        gltfLoader.load('models/transition_deco.glb', (gltf) => {
             const deco = gltf.scene;
             deco.scale.set(0.5, 0.5, 0.5);
             const chairPosX = wallCenterX + 0.1;   // ≈ 0.1
@@ -625,7 +625,7 @@
         // ==================== 法斗模型 ====================
         const bulldogGroup = new THREE.Group();
 
-        gltfLoader.load('french_dog.glb', (gltf) => {
+        gltfLoader.load('models/french_dog.glb', (gltf) => {
             const model = gltf.scene;
             model.scale.set(0.06, 0.06, 0.06);
             model.position.y = 0.0;
@@ -646,7 +646,7 @@
 
         // ==================== 主人模型 ====================
         const ownerGroup = new THREE.Group();
-        gltfLoader.load('zhuren.glb', (gltf) => {
+        gltfLoader.load('models/zhuren.glb', (gltf) => {
             const ownerModel = gltf.scene;
             ownerModel.scale.set(1, 1, 1);
             ownerModel.traverse((child) => {

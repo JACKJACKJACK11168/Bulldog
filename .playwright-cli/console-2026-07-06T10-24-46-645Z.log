@@ -1,0 +1,6 @@
+[    4076ms] [LOG] 法斗篮球游戏已就绪！ @ http://localhost:63464/:963
+[    4076ms] [LOG] 规则：WASD控制法斗跑过去接球，接住后跑到主人身边传回去 @ http://localhost:63464/:964
+[    4076ms] [LOG] 连续完成5次传球即可获胜！ @ http://localhost:63464/:965
+[    4088ms] [LOG] 🐶 加载中... ProgressEvent @ http://localhost:63464/:416
+[    4104ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:63464/favicon.ico:0
+[    4182ms] [LOG] ✅ 法斗加载成功！ @ http://localhost:63464/:414

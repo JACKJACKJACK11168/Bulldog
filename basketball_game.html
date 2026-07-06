@@ -326,7 +326,7 @@
         rightHand.position.set(0.3, 1.4, 0.2);
         ownerGroup.add(rightHand);
         const gltfLoader2 = new GLTFLoader();
-        gltfLoader2.load('basketballzhuren.glb', (gltf) => {
+        gltfLoader2.load('models/basketballzhuren.glb', (gltf) => {
             const m = gltf.scene;
             m.scale.set(1.6,1.6,1.6);
             m.traverse((ch) => { if(ch.isMesh){ch.castShadow=true;ch.receiveShadow=true;} });
@@ -392,7 +392,7 @@
         let dogModel = null;
 
         const gltfLoader = new GLTFLoader();
-        gltfLoader.load('french_dog.glb', (gltf) => {
+        gltfLoader.load('models/french_dog.glb', (gltf) => {
             dogModel = gltf.scene;
             dogModel.scale.set(0.1, 0.1, 0.1);
             dogModel.position.y = 0.55;
