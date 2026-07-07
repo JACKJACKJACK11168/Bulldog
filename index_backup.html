@@ -152,35 +152,9 @@
             <div id="piano-score" style="color:#FFD700;font-size:28px;font-weight:bold;font-family:'Microsoft YaHei',sans-serif;text-shadow:0 0 10px rgba(255,215,0,0.5);"></div>
             <div id="piano-mistakes" style="color:#FF6B6B;font-size:18px;font-family:'Microsoft YaHei',sans-serif;margin-top:4px;"></div>
         </div>
-        <div id="piano-hint" style="position:absolute;top:15%;left:50%;transform:translate(-50%,0);color:rgba(255,255,255,0.7);font-size:18px;font-family:'Microsoft YaHei',sans-serif;pointer-events:none;text-align:center;transition:opacity 0.5s;">🎹 光点落到金线上时，点击对应琴键！<br><span style="font-size:14px;color:rgba(255,255,255,0.4);">允许2次错误</span></div>
         <div id="piano-result" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;display:none;pointer-events:none;">
             <div id="piano-result-text" style="font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.5vw,24px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5);line-height:1.8;max-width:80vw;"></div>
             <div id="piano-result-hint" style="color:rgba(255,255,255,0.6);font-size:14px;margin-top:20px;font-family:'Microsoft YaHei',sans-serif;">点击任意位置返回</div>
-        </div>
-    </div>
-
-    <!-- 项圈视角选择叠加层 -->
-    <div id="collar-choice-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:10001;display:none;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;flex-direction:column;">
-        <div style="color:#FFE4B5;font-size:clamp(18px,2.5vw,28px);font-family:'Microsoft YaHei',sans-serif;margin-bottom:40px;text-shadow:0 0 15px rgba(255,228,181,0.5);">选择一段记忆</div>
-        <div style="display:flex;gap:30px;flex-wrap:wrap;justify-content:center;">
-            <button id="collar-btn-a" style="background:linear-gradient(135deg,#8B4513,#A0522D);color:#FFE4B5;border:2px solid #D2691E;padding:20px 40px;border-radius:16px;font-size:20px;font-family:'Microsoft YaHei',sans-serif;cursor:pointer;transition:all 0.3s;text-shadow:0 0 10px rgba(255,228,181,0.3);">🐶 小八的记忆<br><span style="font-size:14px;color:rgba(255,228,181,0.6);">第一次戴项圈</span></button>
-            <button id="collar-btn-b" style="background:linear-gradient(135deg,#2F4F4F,#3B6B6B);color:#E0FFFF;border:2px solid #5F9EA0;padding:20px 40px;border-radius:16px;font-size:20px;font-family:'Microsoft YaHei',sans-serif;cursor:pointer;transition:all 0.3s;text-shadow:0 0 10px rgba(224,255,255,0.3);">👤 主人的记忆<br><span style="font-size:14px;color:rgba(224,255,255,0.6);">为你戴上项圈</span></button>
-        </div>
-        <div style="color:rgba(255,255,255,0.4);font-size:14px;margin-top:30px;font-family:'Microsoft YaHei',sans-serif;">按 ESC 关闭</div>
-    </div>
-
-    <!-- 项圈视频播放器叠加层 -->
-    <div id="collar-video-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:10002;display:none;background:#000;">
-        <div id="collar-video-placeholder" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-family:'Microsoft YaHei',sans-serif;">
-            <div id="collar-video-title" style="font-size:24px;margin-bottom:20px;color:#FFE4B5;"></div>
-            <div id="collar-video-hint" style="font-size:16px;color:rgba(255,255,255,0.5);margin-bottom:30px;">
-                视频占位区域<br><span style="font-size:13px;">替换 collar_video_a.mp4 或 collar_video_b.mp4 即可播放</span>
-            </div>
-            <video id="collar-video-element" style="max-width:90vw;max-height:70vh;display:none;" controls></video>
-        </div>
-        <div id="collar-video-controls" style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:20px;">
-            <button id="collar-video-play" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:10px 24px;border-radius:25px;font-size:16px;cursor:pointer;font-family:'Microsoft YaHei',sans-serif;">▶ 播放</button>
-            <button id="collar-video-close" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:10px 24px;border-radius:25px;font-size:16px;cursor:pointer;font-family:'Microsoft YaHei',sans-serif;">✕ 关闭</button>
         </div>
     </div>
 
@@ -204,7 +178,7 @@
         let lastFootstepTime = 0;
         const footstepInterval = 0.35;
 
-        function playFootstep(volume = 1.5, freq = 400) {
+        function playFootstep(volume = 0.5, freq = 400) {
             const now = audioCtx.currentTime;
             if (now - lastFootstepTime < footstepInterval) return;
             lastFootstepTime = now;
@@ -251,7 +225,7 @@
             filter.type = 'lowpass';
             filter.frequency.value = 150;
             const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(4.5, now);
+            gain.gain.setValueAtTime(1.5, now);
             gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
             source.connect(filter);
             filter.connect(gain);
@@ -446,16 +420,6 @@
                                     toyBallMesh.material.emissiveIntensity = 0.5;
                                 }
                                 console.log('🏀 玩具球已找到！', child.name);
-                            }
-                            // 恢复钢琴发光状态
-                            if (label === '客厅' && child.material && child.material.name) {
-                                const mn = child.material.name;
-                                if ((mn === 'gangqing' || mn === 'gangqing2' || mn.startsWith('gangqing')) && localStorage.getItem('pianoInteracted') === 'true') {
-                                    child.material = child.material.clone();
-                                    child.material.emissive = new THREE.Color(0xFFD700);
-                                    child.material.emissiveIntensity = 0.8;
-                                    console.log('🎹 钢琴发光已恢复！', mn);
-                                }
                             }
                         }
                     });
@@ -838,7 +802,6 @@
         let toyBallInteracted = localStorage.getItem('toyBallInteracted') === 'true';
         let remoteInteracted = localStorage.getItem('remoteInteracted') === 'true';
         let pianoInteracted = localStorage.getItem('pianoInteracted') === 'true';
-        let collarInteracted = localStorage.getItem('collarInteracted') === 'true';
 
         // 狗粮碗位置（世界坐标，供碰撞检测和每帧检查）
         const dogBowlWorldPos = new THREE.Vector3(bowlPosX, 0, bowlPosZ);
@@ -849,75 +812,6 @@
 
         // 钢琴位置（世界坐标：X≈3.53, Z≈-1.96）
         const pianoWorldPos = new THREE.Vector3(3.53, 0, -1.96);
-
-        // 项圈位置（卧室衣柜前，平放在地上）
-        const collarWorldPos = new THREE.Vector3(-2.14, 0.02, -0.62);
-
-        // ==================== 项圈3D模型 ====================
-        const collarGroup = new THREE.Group();
-
-        // 棕色皮质项圈主体（缩小，平放在地）
-        const collarGeo = new THREE.TorusGeometry(0.12, 0.035, 16, 32);
-        const collarMat = new THREE.MeshStandardMaterial({
-            color: 0xCC2222, roughness: 0.4, metalness: 0.1
-        });
-        const collarMesh = new THREE.Mesh(collarGeo, collarMat);
-        collarMesh.rotation.x = Math.PI / 2;
-        collarMesh.castShadow = true;
-        collarMesh.receiveShadow = true;
-        collarGroup.add(collarMesh);
-
-        // 缝线纹理环
-        const collarGeo2 = new THREE.TorusGeometry(0.123, 0.008, 12, 32);
-        const collarMat2 = new THREE.MeshStandardMaterial({
-            color: 0x991111, roughness: 0.5, metalness: 0.05
-        });
-        const collarMesh2 = new THREE.Mesh(collarGeo2, collarMat2);
-        collarMesh2.rotation.x = Math.PI / 2;
-        collarMesh2.castShadow = true;
-        collarGroup.add(collarMesh2);
-
-        // 搭扣
-        const buckleGeo = new THREE.BoxGeometry(0.04, 0.02, 0.04);
-        const buckleMat = new THREE.MeshStandardMaterial({
-            color: 0xFFD700, roughness: 0.1, metalness: 1.0
-        });
-        const buckleMesh = new THREE.Mesh(buckleGeo, buckleMat);
-        buckleMesh.position.set(0, 0.01, 0.12);
-        buckleMesh.castShadow = true;
-        collarGroup.add(buckleMesh);
-
-        // 纯金吊牌（平放在项圈侧面地上）
-        const tagGeo = new THREE.BoxGeometry(0.06, 0.08, 0.012);
-        const tagMat = new THREE.MeshStandardMaterial({
-            color: 0xFFD700, roughness: 0.05, metalness: 1.0
-        });
-        const tagMesh = new THREE.Mesh(tagGeo, tagMat);
-        tagMesh.position.set(0.15, 0.01, 0);
-        tagMesh.rotation.z = -0.3;
-        tagMesh.castShadow = true;
-        collarGroup.add(tagMesh);
-
-        // 吊牌连接小环
-        const ringGeo = new THREE.TorusGeometry(0.015, 0.004, 8, 12);
-        const ringMesh = new THREE.Mesh(ringGeo, buckleMat);
-        ringMesh.position.set(0, 0.015, 0.12);
-        ringMesh.castShadow = true;
-        collarGroup.add(ringMesh);
-
-        // 如果之前互动过，恢复发光
-        if (collarInteracted) {
-            collarGroup.traverse((child) => {
-                if (child.isMesh && child.material.emissive !== undefined) {
-                    child.material = child.material.clone();
-                    child.material.emissive = new THREE.Color(0xFFD700);
-                    child.material.emissiveIntensity = 0.5;
-                }
-            });
-        }
-
-        collarGroup.position.copy(collarWorldPos);
-        scene.add(collarGroup);
 
         function showFeedback(text) {
             feedbackEl.textContent = text;
@@ -1043,120 +937,6 @@
             console.log('📺 闪回效果触发：以前主人抱着我一起看电视…');
         }
 
-        // ==================== 项圈双视角短片 ====================
-        const collarChoiceOverlay = document.getElementById('collar-choice-overlay');
-        const collarVideoOverlay = document.getElementById('collar-video-overlay');
-        const collarVideoElement = document.getElementById('collar-video-element');
-        const collarVideoTitle = document.getElementById('collar-video-title');
-        const collarVideoHint = document.getElementById('collar-video-hint');
-        const collarVideoPlayBtn = document.getElementById('collar-video-play');
-        const collarVideoCloseBtn = document.getElementById('collar-video-close');
-        const collarBtnA = document.getElementById('collar-btn-a');
-        const collarBtnB = document.getElementById('collar-btn-b');
-
-        let currentVideoType = null; // 'a' | 'b'
-
-        function triggerCollarInteraction() {
-            if (collarInteracted || pianoGameActive) return;
-
-            // 禁用3D场景
-            renderer.domElement.style.pointerEvents = 'none';
-            hintEl.classList.remove('visible');
-
-            // 显示视角选择
-            collarChoiceOverlay.style.display = 'flex';
-        }
-
-        function closeCollarChoice() {
-            collarChoiceOverlay.style.display = 'none';
-            renderer.domElement.style.pointerEvents = '';
-        }
-
-        function playCollarVideo(type) {
-            currentVideoType = type;
-            collarChoiceOverlay.style.display = 'none';
-
-            // 配置视频
-            const videoFile = type === 'a' ? 'collar_video_a.mp4' : 'collar_video_b.mp4';
-            const titleText = type === 'a'
-                ? '🐶 小八的记忆 — 第一次戴项圈'
-                : '👤 主人的记忆 — 为你戴上项圈';
-
-            collarVideoTitle.textContent = titleText;
-            collarVideoElement.src = videoFile;
-            collarVideoElement.style.display = 'block';
-            collarVideoHint.style.display = 'none';
-            collarVideoOverlay.style.display = 'block';
-
-            // 尝试自动播放
-            collarVideoElement.play().catch(() => {
-                // 自动播放被阻止，显示提示
-                collarVideoHint.style.display = 'block';
-                collarVideoHint.innerHTML = '点击 ▶ 播放 按钮开始观看<br><span style="font-size:13px;">（替换 ' + videoFile + ' 为真实视频）</span>';
-            });
-
-            collarVideoPlayBtn.textContent = '⏸ 暂停';
-        }
-
-        function closeCollarVideo() {
-            collarVideoElement.pause();
-            collarVideoElement.src = '';
-            collarVideoElement.style.display = 'none';
-            collarVideoHint.style.display = 'block';
-            collarVideoHint.innerHTML = '视频占位区域<br><span style="font-size:13px;">替换 collar_video_a.mp4 或 collar_video_b.mp4 即可播放</span>';
-            collarVideoOverlay.style.display = 'none';
-            currentVideoType = null;
-
-            // 标记已互动
-            if (!collarInteracted) {
-                collarInteracted = true;
-                localStorage.setItem('collarInteracted', 'true');
-                // 项圈发光
-                collarGroup.traverse((child) => {
-                    if (child.isMesh && child.material.emissive !== undefined) {
-                        child.material = child.material.clone();
-                        child.material.emissive = new THREE.Color(0xFFD700);
-                        child.material.emissiveIntensity = 0.5;
-                    }
-                });
-            }
-
-            renderer.domElement.style.pointerEvents = '';
-        }
-
-        // 视频结束自动关闭
-        collarVideoElement.addEventListener('ended', () => {
-            closeCollarVideo();
-        });
-
-        // 播放/暂停按钮
-        collarVideoPlayBtn.addEventListener('click', () => {
-            if (!currentVideoType) return;
-            if (collarVideoElement.paused) {
-                collarVideoElement.play();
-                collarVideoPlayBtn.textContent = '⏸ 暂停';
-            } else {
-                collarVideoElement.pause();
-                collarVideoPlayBtn.textContent = '▶ 播放';
-            }
-        });
-
-        // 关闭按钮
-        collarVideoCloseBtn.addEventListener('click', closeCollarVideo);
-
-        // 选择按钮
-        collarBtnA.addEventListener('click', () => playCollarVideo('a'));
-        collarBtnB.addEventListener('click', () => playCollarVideo('b'));
-
-        // ESC 关闭选择面板
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Escape') {
-                if (collarChoiceOverlay.style.display === 'flex') {
-                    closeCollarChoice();
-                }
-            }
-        });
-
         // ==================== 钢琴节奏小游戏 ====================
         const pianoOverlay = document.getElementById('piano-game-overlay');
         const pianoCanvas = document.getElementById('piano-canvas');
@@ -1183,19 +963,21 @@
             'G4': 392.00, 'A4': 440.00, 'B4': 493.88, 'C5': 523.25
         };
 
-        // 预设旋律：《小星星》前28个音符
+        // 预设旋律：《小星星》 C-C-G-G-A-A-G F-F-E-E-D-D-C
         const melodyNotes = [
             'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4',
             'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4',
             'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4',
-            'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4'
+            'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4',
+            'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4',
+            'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4'
         ];
 
         // 下落音符
         let fallingNotes = [];
         const FALL_SPEED = 130; // px/s
         const TRACK_Y_START = -60;
-        const TRIGGER_LINE_RATIO = 0.55;
+        const TRIGGER_LINE_RATIO = 0.65;
 
         // 动画相关
         let pianoLastTime = 0;
@@ -1276,14 +1058,12 @@
                 'C4','C4','G4','G4','A4','A4','G4',
                 'F4','F4','E4','E4','D4','D4','C4',
                 'G4','G4','F4','F4','E4','E4','D4',
-                'G4','G4','F4','F4','E4','E4','D4'
+                'G4','G4','F4','F4','E4','E4','D4',
+                'C4','C4','G4','G4','A4','A4','G4',
+                'F4','F4','E4','E4','D4','D4','C4'
             ];
-            const phraseEnds = new Set([6, 13, 20]);
-            let acc = 0;
             melody.forEach((note, i) => {
-                if (phraseEnds.has(i - 1)) acc += 300;
-                const delay = i * 380 + acc;
-                setTimeout(() => playPianoNote(note, 0.6, 0.35), delay);
+                setTimeout(() => playPianoNote(note, 0.5, 0.3), i * 280);
             });
         }
 
@@ -1304,17 +1084,14 @@
             keyGlows = {};
             keyShakes = {};
 
-            // 生成下落音符，小节之间插入额外间隔
-            const phraseEnds = new Set([6, 13, 20]); // 每小节最后一个音符索引
-            let accumulatedOffset = 0;
+            // 生成下落音符
             melodyNotes.forEach((noteName, i) => {
-                if (phraseEnds.has(i - 1)) accumulatedOffset += 120; // 小节间间隔
                 const keyIndex = getKeyIndex(noteName);
                 if (keyIndex >= 0) {
                     fallingNotes.push({
                         keyIndex: keyIndex,
                         noteName: noteName,
-                        y: TRACK_Y_START - (i * 90 + accumulatedOffset),
+                        y: TRACK_Y_START - i * 90,
                         active: true,
                         hit: false,
                         missed: false
@@ -1360,8 +1137,8 @@
 
             const w = pianoCanvas.width;
             const h = pianoCanvas.height;
-            const keyAreaTop = h * 0.40;
-            const keyAreaBottom = h * 0.80;
+            const keyAreaTop = h * 0.55;
+            const keyAreaBottom = h * 0.95;
             const keyWidth = w * 0.85 / WHITE_KEYS;
             const keyAreaLeft = (w - keyWidth * WHITE_KEYS) / 2;
 
@@ -1395,12 +1172,6 @@
                 keyGlows[clickedKey] = { time: 0.4, color: '#FFD700' };
                 playPianoNote(bestNote.noteName, 0.5, 0.3);
                 pianoScoreEl.textContent = `✦ ${pianoScore} / ${melodyNotes.length}`;
-
-                // 首次命中后隐藏提示
-                const hintEl2 = document.getElementById('piano-hint');
-                if (hintEl2 && pianoScore === 1) {
-                    hintEl2.style.opacity = '0';
-                }
 
                 // 检查是否完成
                 checkPianoComplete();
@@ -1456,19 +1227,19 @@
             pianoGameResult = result;
             pianoResultEl.style.display = 'block';
 
+            if (!pianoInteracted) {
+                pianoInteracted = true;
+                localStorage.setItem('pianoInteracted', 'true');
+            }
+
             if (result === 'win') {
                 pianoResultText.innerHTML = '…主人教我的第一首曲子，<br>我还记得。';
                 playVictoryMelody();
+                // 让钢琴在3D场景中发光
                 makePianoGlow(true);
-                // 只有胜利才永久锁定
-                if (!pianoInteracted) {
-                    pianoInteracted = true;
-                    localStorage.setItem('pianoInteracted', 'true');
-                }
             } else {
                 pianoResultText.innerHTML = '…有些旋律，<br>再也接不上了。';
                 makePianoGlow(false);
-                // 失败不锁定，可以重试
             }
 
             // 点击任意位置返回
@@ -1488,8 +1259,7 @@
             scene.traverse((child) => {
                 if (child.isMesh && child.material) {
                     const matName = child.material.name || '';
-                    // OBJ加载的材质可能带"_0"后缀
-                    if (matName && (matName === 'gangqing' || matName === 'gangqing2' || matName.startsWith('gangqing'))) {
+                    if (matName && (matName.includes('gangqing') || matName.includes('gangqing2'))) {
                         if (success) {
                             child.material = child.material.clone();
                             child.material.emissive = new THREE.Color(0xFFD700);
@@ -1506,7 +1276,6 @@
 
         // 更新音符
         function updateFallingNotes(dt) {
-            if (pianoGameOver) return;
             const h = pianoCanvas.height;
             const triggerY = h * TRIGGER_LINE_RATIO;
 
@@ -1577,8 +1346,8 @@
             ctx.setLineDash([]);
 
             // 轨道区域
-            const keyAreaTop = h * 0.40;
-            const keyAreaBottom = h * 0.80;
+            const keyAreaTop = h * 0.55;
+            const keyAreaBottom = h * 0.95;
             const keyWidth = w * 0.85 / WHITE_KEYS;
             const keyAreaLeft = (w - keyWidth * WHITE_KEYS) / 2;
 
@@ -1763,23 +1532,10 @@
             const playerPos = bulldogGroup.position;
             let closestDist = Infinity, closestItem = null;
 
-            // 检查项圈（最高优先级）
-            if (!collarInteracted) {
-                const collarDist = playerPos.distanceTo(collarWorldPos);
-                if (collarDist < 2.0) {
-                    closestDist = collarDist;
-                    closestItem = {
-                        id: 'collar',
-                        name: '项圈',
-                        action: () => triggerCollarInteraction()
-                    };
-                }
-            }
-
-            // 检查钢琴
-            if (!pianoInteracted && !pianoGameActive) {
+            // 检查钢琴（最高优先级，可重复互动）
+            if (!pianoGameActive) {
                 const pianoDist = playerPos.distanceTo(pianoWorldPos);
-                if (pianoDist < 0.8 && pianoDist < closestDist) {
+                if (pianoDist < 0.8) {
                     closestDist = pianoDist;
                     closestItem = {
                         id: 'piano',
@@ -1951,10 +1707,6 @@
         });
 
         document.addEventListener('keydown', (e) => {
-            // 项圈选择面板或视频播放中屏蔽所有游戏按键
-            if (collarChoiceOverlay.style.display === 'flex' || collarVideoOverlay.style.display === 'block') {
-                return;
-            }
             // 钢琴游戏中屏蔽移动键和E键
             if (pianoGameActive) {
                 if (e.code === 'KeyE') e.preventDefault();
@@ -2015,8 +1767,8 @@
         }
 
         function updateMovement(dt) {
-            // 项圈面板或钢琴游戏中停止移动
-            if (pianoGameActive || collarChoiceOverlay.style.display === 'flex' || collarVideoOverlay.style.display === 'block') return;
+            // 钢琴游戏中停止移动
+            if (pianoGameActive) return;
 
             const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw)).normalize();
             const right = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw)).normalize();
