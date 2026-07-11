@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>把狗粮收回来</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#1a0f0a;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:"Comic Sans MS","YouYuan",cursive,sans-serif}
+canvas{display:block;cursor:pointer;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,0.6)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+(function(){
+const c=document.getElementById('c');
+const W=800,H=600;
+c.width=W;c.height=H;
+const ctx=c.getContext('2d');
+const dpr=Math.min(window.devicePixelRatio||1,1); // 保持性能
+
+const BOWL={x:W/2,y:H/2,radius:48};
+const TOTAL_TIME=90;
+const MAX_DRAG_PX=250;
+const DRAG_SCALE=0.035;
+const FRICTION_DECAY=0.98;
+const MIN_SPEED=0.15;
+
+let kibbles=[];
+let obstacles=[];
+let selected=null;
+let dragging=false;
+let dragFromX=0,dragFromY=0,dragToX=0,dragToY=0;
+let mouseX=0,mouseY=0;
+let successCount=0,totalCount=12;
+let timeLeft=TOTAL_TIME;
+let gameState='playing';
+let bowlGlow=0,pulseTimer=0;
+let particles=[];
+let popups=[];
+
+
+function dist(a,b,c,d){return Math.hypot((c||0)-a,(d||0)-b)}
+
+// ── 障碍物定义 ──
+function initObstacles(){
+    obstacles=[];
+    const minDist=(BOWL.radius+15)/55;
+    // 大件优先：书本 ×2，笔 ×2
+    for(let i=0;i<2;i++)addObstacle({type:'book',radius:0.65,restitution:0.7,deflect:12,particle:'#D7CCC8'},minDist);
+    for(let i=0;i<2;i++)addObstacle({type:'pen',radius:0.35,restitution:0.4,deflect:18,particle:'#90A4AE'},minDist);
+    // 积木 ×3
+    for(let i=0;i<3;i++)addObstacle({type:'block',radius:0.24,restitution:0.5,deflect:25,particle:'#FDD835'},minDist);
+    // 瓶盖 ×4
+    for(let i=0;i<4;i++)addObstacle({type:'cap',radius:0.22,restitution:0.6,deflect:20,particle:'#B3E5FC'},minDist);
+}
+function addObstacle(def,minDist){
+    for(let tries=0;tries<300;tries++){
+        const d=minDist+Math.random()*(2.6-minDist);
+        const a=Math.random()*Math.PI*2;
+        const x=BOWL.x+Math.cos(a)*d*55;
+        const y=BOWL.y+Math.sin(a)*d*55;
+        const rPx=def.radius*55;
+        let ok=true;
+        for(let ex of obstacles){
+            if(dist(x,y,ex.x,ex.y)<(def.radius+ex.def.radius)*55+6){ok=false;break;}
+        }
+        if(ok&&x>25&&x<W-25&&y>40&&y<H-40){
+            obstacles.push({x,y,radius:rPx,def,angle:Math.random()*Math.PI*2});
+            return;
+        }
+    }
+}
+initObstacles();
+
+// ── 狗粮 ──
+const sizeDefs=[
+    {r:9,color:'#5D3A2A',frictionMul:1.3,speedMul:0.7,count:4},
+    {r:6.5,color:'#5D3A2A',frictionMul:1.0,speedMul:1.0,count:4},
+    {r:4,color:'#5D3A2A',frictionMul:0.6,speedMul:1.4,count:4},
+];
+function noOverlap(x,y,r,ignore){
+    for(let k of kibbles){
+        if(k===ignore)continue;
+        if(dist(x,y,k.x,k.y)<r+k.radius+2)return false;
+    }
+    for(let o of obstacles){
+        if(dist(x,y,o.x,o.y)<r+o.radius+2)return false;
+    }
+    if(dist(x,y,BOWL.x,BOWL.y)<BOWL.radius+r+5)return false;
+    return true;
+}
+function initKibbles(){
+    kibbles=[];
+    for(let s=0;s<sizeDefs.length;s++){
+        const sz=sizeDefs[s];
+        for(let i=0;i<sz.count;i++){
+            let tries=0;
+            while(tries<300){
+                const d=2.5+Math.random()*3.0;
+                const a=Math.random()*Math.PI*2;
+                const x=BOWL.x+Math.cos(a)*d*55;
+                const y=BOWL.y+Math.sin(a)*d*55;
+                const r=sz.r;
+                if(noOverlap(x,y,r)&&y>40&&y<H-40){
+                    kibbles.push({
+                        x,y,radius:r,alive:true,color:sz.color,
+                        frictionMul:sz.frictionMul,vx:0,vy:0,
+                        trail:[],phase:Math.random()*Math.PI*2
+                    });
+                    break;
+                }
+                tries++;
+            }
+        }
+    }
+}
+initKibbles();
+
+// ── 输入 ──
+c.addEventListener('mousemove',function(e){
+    const rect=c.getBoundingClientRect();
+    mouseX=(e.clientX-rect.left)*W/rect.width;
+    mouseY=(e.clientY-rect.top)*H/rect.height;
+    if(dragging){dragToX=mouseX;dragToY=mouseY;}
+});
+c.addEventListener('mousedown',function(e){
+    if(gameState!=='playing')return;
+    const rect=c.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)*W/rect.width;
+    const my=(e.clientY-rect.top)*H/rect.height;
+    for(let k of kibbles){
+        if(!k.alive)continue;
+        if(Math.hypot(mx-k.x,my-k.y)<k.radius+10){
+            selected=k;dragging=true;
+            dragFromX=k.x;dragFromY=k.y;
+            dragToX=mx;dragToY=my;
+            return;
+        }
+    }
+});
+function doLaunch(){
+    if(!dragging||!selected)return;
+    const dx=dragToX-dragFromX,dy=dragToY-dragFromY;
+    let d=Math.hypot(dx,dy);
+    if(d<5){dragging=false;selected=null;return;}
+    if(d>MAX_DRAG_PX)d=MAX_DRAG_PX;
+    const sp=d*DRAG_SCALE*55*(selected.speedMul||1);
+    const nx=dx/d,ny=dy/d;
+    selected.vx=nx*sp;selected.vy=ny*sp;
+    dragging=false;selected=null;
+}
+c.addEventListener('mouseup',function(){doLaunch();});
+c.addEventListener('mouseleave',function(){doLaunch();});
+
+// 触摸
+c.addEventListener('touchmove',function(e){
+    e.preventDefault();
+    const rect=c.getBoundingClientRect();
+    mouseX=(e.touches[0].clientX-rect.left)*W/rect.width;
+    mouseY=(e.touches[0].clientY-rect.top)*H/rect.height;
+    if(dragging){dragToX=mouseX;dragToY=mouseY;}
+},{passive:false});
+c.addEventListener('touchstart',function(e){
+    e.preventDefault();
+    if(gameState!=='playing')return;
+    const rect=c.getBoundingClientRect();
+    const mx=(e.touches[0].clientX-rect.left)*W/rect.width;
+    const my=(e.touches[0].clientY-rect.top)*H/rect.height;
+    for(let k of kibbles){
+        if(!k.alive)continue;
+        if(Math.hypot(mx-k.x,my-k.y)<k.radius+12){
+            selected=k;dragging=true;
+            dragFromX=k.x;dragFromY=k.y;
+            dragToX=mx;dragToY=my;
+            return;
+        }
+    }
+},{passive:false});
+c.addEventListener('touchend',function(){doLaunch();});
+
+// 结局点击
+function goBack(){
+    window.location.href='owner.html';
+}
+document.addEventListener('click',function(e){if(gameState!=='playing')goBack();});
+document.addEventListener('touchend',function(e){if(gameState!=='playing')goBack();});
+
+// ── 更新 ──
+function update(dt){
+    if(gameState!=='playing')return;
+    timeLeft-=dt;
+
+    // 物理 + 碰撞
+    for(let k of kibbles){
+        if(!k.alive)continue;
+        if(Math.hypot(k.vx,k.vy)<MIN_SPEED){k.vx=0;k.vy=0;continue;}
+        k.vx*=FRICTION_DECAY;
+        k.vy*=FRICTION_DECAY;
+        const fric=k.frictionMul*0.02;
+        if(Math.abs(k.vx)>0)k.vx-=Math.sign(k.vx)*Math.min(Math.abs(k.vx),fric*dt*60);
+        if(Math.abs(k.vy)>0)k.vy-=Math.sign(k.vy)*Math.min(Math.abs(k.vy),fric*dt*60);
+        k.x+=k.vx*dt;k.y+=k.vy*dt;
+
+        // 边界
+        if(k.x<k.radius){k.x=k.radius;k.vx*=-0.6;}
+        if(k.x>W-k.radius){k.x=W-k.radius;k.vx*=-0.6;}
+        if(k.y<k.radius){k.y=k.radius;k.vy*=-0.6;}
+        if(k.y>H-k.radius){k.y=H-k.radius;k.vy*=-0.6;}
+
+        // 障碍物碰撞
+        for(let o of obstacles){
+            const od=dist(k.x,k.y,o.x,o.y);
+            if(od<k.radius+o.radius){
+                const nx=(k.x-o.x)/od,ny=(k.y-o.y)/od;
+                k.x=o.x+nx*(k.radius+o.radius+1);
+                k.y=o.y+ny*(k.radius+o.radius+1);
+                const dot=k.vx*nx+k.vy*ny;
+                if(dot>0)continue; // 已在远离
+                const rest=o.def.restitution;
+                const deflect=o.def.deflect*(Math.random()*2-1)*Math.PI/180;
+                const cosD=Math.cos(deflect),sinD=Math.sin(deflect);
+                const rx=k.vx-2*dot*nx,ry=k.vy-2*dot*ny;
+                k.vx=(rx*cosD-ry*sinD)*rest;
+                k.vy=(rx*sinD+ry*cosD)*rest;
+                // 书本卡住逻辑
+                if(o.def.type==='book'&&Math.hypot(k.vx,k.vy)<0.08){
+                    k.vx=0;k.vy=0;
+                }
+                const pColor=o.def.particle||'#fff';
+                const pCount=3+Math.floor(Math.random()*3);
+                for(let p=0;p<pCount;p++){
+                    particles.push({x:k.x,y:k.y,vx:nx*(20+Math.random()*30)+(Math.random()-0.5)*20,vy:ny*(20+Math.random()*30)+(Math.random()-0.5)*20,life:0.3,color:pColor});
+                }
+            }
+        }
+
+        // 入碗判定
+        if(dist(k.x,k.y,BOWL.x,BOWL.y)<BOWL.radius){
+            successCount++;pulseTimer=0.4;bowlGlow=1;
+            popups.push({x:BOWL.x,y:BOWL.y-20,text:'+1',life:1,vy:-30});
+            k.alive=false;
+        }
+
+        // 轨迹
+        k.trail.push({x:k.x,y:k.y});
+        if(k.trail.length>8)k.trail.shift();
+    }
+
+    // 胜利判定
+    if(successCount>=totalCount){
+        gameState='win';
+    }else if(timeLeft<=0){
+        timeLeft=0;gameState='lose';
+    }
+
+    // 奖励动画
+    if(pulseTimer>0)pulseTimer-=dt;
+    if(bowlGlow>0)bowlGlow=Math.max(0,bowlGlow-dt*2);
+    // 粒子
+    for(let i=particles.length-1;i>=0;i--){
+        const p=particles[i];
+        p.x+=p.vx*dt;p.y+=p.vy*dt;
+        p.life-=dt;
+        if(p.life<=0)particles.splice(i,1);
+    }
+    // popup
+    for(let i=popups.length-1;i>=0;i--){
+        const pp=popups[i];
+        pp.y+=pp.vy*dt;
+        pp.life-=dt;
+        if(pp.life<=0)popups.splice(i,1);
+    }
+}
+
+// ── 绘制 ──
+function draw(){
+    ctx.save();
+    ctx.clearRect(0,0,W,H);
+
+    // 地板瓷砖
+    ctx.fillStyle='#D4A76A';
+    ctx.fillRect(0,0,W,H);
+    const tileSize=90;
+    ctx.strokeStyle='rgba(160,120,70,0.35)';
+    ctx.lineWidth=2;
+    for(let x=tileSize;x<W;x+=tileSize){
+        ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    }
+    for(let y=tileSize;y<H;y+=tileSize){
+        ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+    }
+
+    // ── 障碍物 ──
+    for(let o of obstacles){
+        ctx.save();
+        const cx=o.x,cy=o.y,r=o.radius,a=o.angle;
+        const d=o.def;
+        if(d.type==='block'){
+            // 3D立体积木（等距透视）
+            ctx.translate(cx,cy);ctx.rotate(a);
+            const s=r*1.8; // 边长
+            // 投影
+            ctx.fillStyle='rgba(0,0,0,0.15)';
+            ctx.beginPath();ctx.moveTo(-s*0.55+3,-s*0.2+3);ctx.lineTo(s*0.55+3,-s*0.2+3);
+            ctx.lineTo(s*0.55+3,s*0.8+3);ctx.lineTo(-s*0.55+3,s*0.8+3);ctx.fill();
+            // 右侧面（暗）
+            ctx.fillStyle='#F9A825';
+            ctx.beginPath();ctx.moveTo(s*0.55,-s*0.2);ctx.lineTo(s*0.55,s*0.8);ctx.lineTo(0,s*1.2);ctx.lineTo(0,s*0.2);ctx.closePath();ctx.fill();
+            // 左侧面（中间亮度）
+            ctx.fillStyle='#FDD835';
+            ctx.beginPath();ctx.moveTo(-s*0.55,-s*0.2);ctx.lineTo(0,s*0.2);ctx.lineTo(0,s*1.2);ctx.lineTo(-s*0.55,s*0.8);ctx.closePath();ctx.fill();
+            // 顶面（亮）
+            ctx.fillStyle='#FFEE58';
+            ctx.beginPath();ctx.moveTo(-s*0.55,-s*0.2);ctx.lineTo(0,-s*0.6);ctx.lineTo(s*0.55,-s*0.2);ctx.lineTo(0,s*0.2);ctx.closePath();ctx.fill();
+            // 顶面高光
+            ctx.fillStyle='rgba(255,255,255,0.25)';
+            ctx.beginPath();ctx.moveTo(-s*0.25,-s*0.35);ctx.lineTo(0,-s*0.55);ctx.lineTo(s*0.2,-s*0.35);ctx.lineTo(0,-s*0.15);ctx.closePath();ctx.fill();
+            // 字母 E（顶面）
+            ctx.fillStyle='#F57F17';
+            ctx.font='bold '+(s*0.5)+'px sans-serif';
+            ctx.textAlign='center';ctx.textBaseline='middle';
+            ctx.fillText('E',-s*0.02,-s*0.35);
+            // 边缘线
+            ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(-s*0.55,-s*0.2);ctx.lineTo(0,-s*0.6);ctx.lineTo(s*0.55,-s*0.2);
+            ctx.lineTo(0,s*0.2);ctx.lineTo(-s*0.55,-s*0.2);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(s*0.55,-s*0.2);ctx.lineTo(s*0.55,s*0.8);ctx.lineTo(0,s*1.2);
+            ctx.lineTo(0,s*0.2);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(-s*0.55,-s*0.2);ctx.lineTo(-s*0.55,s*0.8);ctx.lineTo(0,s*1.2);ctx.stroke();
+        }else if(d.type==='cap'){
+            // 蓝色塑料瓶盖：立体3D
+            ctx.translate(cx,cy);ctx.rotate(a);
+            const cr=r,crH=cr*0.65;
+            // 投影
+            ctx.beginPath();ctx.ellipse(0,crH+3,cr+2,crH+2,0,0,Math.PI*2);
+            ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fill();
+            // 侧面
+            const sideGrad=ctx.createLinearGradient(-cr,0,cr,0);
+            sideGrad.addColorStop(0,'#0D47A1');sideGrad.addColorStop(0.25,'#1976D2');
+            sideGrad.addColorStop(0.5,'#42A5F5');sideGrad.addColorStop(0.75,'#1565C0');sideGrad.addColorStop(1,'#0D47A1');
+            ctx.fillStyle=sideGrad;
+            ctx.beginPath();ctx.moveTo(-cr,0);ctx.lineTo(-cr,crH);ctx.quadraticCurveTo(-cr,crH+cr*0.6,0,crH+cr*0.6);
+            ctx.quadraticCurveTo(cr,crH+cr*0.6,cr,crH);ctx.lineTo(cr,0);
+            ctx.ellipse(0,0,cr,cr*0.45,0,Math.PI,0,true);ctx.fill();
+            // 侧面竖纹
+            const ridges=14;
+            for(let ri=0;ri<ridges;ri++){
+                const rx=(ri/ridges-0.5)*2*cr*0.85;
+                ctx.fillStyle='rgba(0,0,0,0.08)';
+                ctx.fillRect(rx-0.5,crH*0.15,1,crH*0.85);
+            }
+            // 瓶盖顶面
+            const topGrad=ctx.createRadialGradient(-cr*0.2,cr*0.05,cr*0.05,0,0,cr);
+            topGrad.addColorStop(0,'#64B5F6');topGrad.addColorStop(0.4,'#42A5F5');
+            topGrad.addColorStop(0.8,'#1976D2');topGrad.addColorStop(1,'#0D47A1');
+            ctx.beginPath();ctx.ellipse(0,0,cr,cr*0.45,0,0,Math.PI*2);ctx.fillStyle=topGrad;ctx.fill();
+            // 顶面内圈（凹槽）
+            ctx.beginPath();ctx.ellipse(0,cr*0.05,cr*0.7,cr*0.3,0,0,Math.PI*2);
+            ctx.fillStyle='rgba(0,0,0,0.15)';ctx.fill();
+            // 边缘高光环
+            ctx.beginPath();ctx.ellipse(0,0,cr,cr*0.45,0,0,Math.PI*2);
+            ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;ctx.stroke();
+            // 主高光
+            ctx.beginPath();ctx.ellipse(-cr*0.35,-cr*0.08,cr*0.2,cr*0.08,-0.2,0,Math.PI*2);
+            ctx.fillStyle='rgba(255,255,255,0.4)';ctx.fill();
+        }else if(d.type==='book'){
+            // 书本：白色封面+精装效果
+            ctx.translate(cx,cy);ctx.rotate(a);
+            const bw2=r*1.5,bh2=r*1.1;
+            // 投影
+            ctx.fillStyle='rgba(0,0,0,0.18)';
+            ctx.fillRect(-bw2/2+3,-bh2/2+3,bw2,bh2);
+            // 封面主体
+            ctx.fillStyle='#FFFFFF';
+            ctx.fillRect(-bw2/2,-bh2/2,bw2,bh2);
+            // 左侧蓝色装饰带
+            ctx.fillStyle='#1565C0';
+            ctx.fillRect(-bw2/2,-bh2/2,bw2*0.08,bh2);
+            // 上方红条
+            ctx.fillStyle='#E53935';
+            ctx.fillRect(-bw2/2+bw2*0.08,-bh2/2,bw2*0.02,bh2*0.25);
+            // 左下蓝方块
+            ctx.fillStyle='#1565C0';
+            ctx.fillRect(-bw2/2+bw2*0.12,bh2*0.2,bw2*0.15,bh2*0.18);
+            // 标题
+            ctx.fillStyle='#212121';
+            ctx.font='bold '+(bw2*0.18)+'px serif';
+            ctx.textAlign='center';
+            ctx.fillText('Dog',bw2*0.2,-bh2*0.12);
+            ctx.fillText('Food',bw2*0.2,bh2*0.08);
+            // 外框
+            ctx.strokeStyle='rgba(0,0,0,0.2)';ctx.lineWidth=2;
+            ctx.strokeRect(-bw2/2,-bh2/2,bw2,bh2);
+        }else if(d.type==='pen'){
+            // 笔：精细钢笔
+            ctx.translate(cx,cy);ctx.rotate(a);
+            const pw=r*0.18,ph=r*1.7;
+            // 笔身
+            ctx.fillStyle='#263238';
+            ctx.fillRect(-pw,-ph,pw*2,ph*2);
+            // 握笔区
+            ctx.fillStyle='#546E7A';
+            ctx.fillRect(-pw*0.8,-ph*0.5,pw*1.6,ph*1.2);
+            // 笔夹
+            ctx.fillStyle='#FFC107';
+            ctx.fillRect(-pw,-ph*1.6,pw*2,ph*0.15);
+            // 笔尖
+            ctx.beginPath();ctx.moveTo(-pw*0.6,ph);ctx.lineTo(0,ph*1.3);ctx.lineTo(pw*0.6,ph);
+            ctx.closePath();ctx.fillStyle='#B0BEC5';ctx.fill();
+            // 笔尖铱粒
+            ctx.beginPath();ctx.arc(0,ph*1.25,pw*0.3,0,Math.PI*2);
+            ctx.fillStyle='#607D8B';ctx.fill();
+            // 边框
+            ctx.strokeStyle='rgba(0,0,0,0.25)';ctx.lineWidth=1;
+            ctx.strokeRect(-pw,-ph,pw*2,ph*2);
+        }
+        ctx.restore();
+    }
+
+    // ── 碗 ──
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(BOWL.x,BOWL.y+6,BOWL.radius+6,BOWL.radius*0.35,0,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,0.2)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(BOWL.x,BOWL.y,BOWL.radius,0,Math.PI*2);
+    const bg=ctx.createRadialGradient(BOWL.x-BOWL.radius*0.25,BOWL.y-BOWL.radius*0.5,BOWL.radius*0.05,BOWL.x+BOWL.radius*0.05,BOWL.y+BOWL.radius*0.1,BOWL.radius*1.05);
+    bg.addColorStop(0,'#f5f5f5');bg.addColorStop(0.08,'#e0e0e0');bg.addColorStop(0.25,'#b0b0b0');bg.addColorStop(0.55,'#7a7a7a');bg.addColorStop(0.85,'#555');bg.addColorStop(1,'#3a3a3a');
+    ctx.fillStyle=bg;ctx.fill();
+    ctx.beginPath();ctx.arc(BOWL.x,BOWL.y,BOWL.radius,0,Math.PI*2);
+    ctx.strokeStyle='rgba(220,220,220,0.9)';ctx.lineWidth=3;ctx.stroke();
+    ctx.beginPath();ctx.arc(BOWL.x,BOWL.y,BOWL.radius-1,0,Math.PI*2);
+    ctx.strokeStyle='rgba(60,60,60,0.6)';ctx.lineWidth=1.5;ctx.stroke();
+
+    const ir=BOWL.radius-8;
+    ctx.beginPath();ctx.arc(BOWL.x,BOWL.y,ir,0,Math.PI*2);
+    const ig=ctx.createRadialGradient(BOWL.x-ir*0.15,BOWL.y+ir*0.1,ir*0.05,BOWL.x,BOWL.y+2,ir);
+    ig.addColorStop(0,'#d0d0d0');ig.addColorStop(0.3,'#b5b5b5');ig.addColorStop(0.7,'#787878');ig.addColorStop(1,'#4a4a4a');
+    ctx.fillStyle=ig;ctx.fill();
+
+    // 碗内已收集的狗粮
+    const ir2=BOWL.radius-12;
+    for(let i=0;i<successCount;i++){
+        const a=i*2.4+(i*i*0.3);
+        const r2=ir2*0.7*Math.sqrt((i+1)/totalCount);
+        const px=BOWL.x+Math.cos(a)*r2*0.5;
+        const py=BOWL.y+Math.sin(a)*r2*0.3;
+        ctx.fillStyle='rgba(70,35,15,0.7)';
+        ctx.beginPath();ctx.arc(px,py,3,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='rgba(100,60,30,0.5)';
+        ctx.beginPath();ctx.arc(px+1,py-1,1.2,0,Math.PI*2);ctx.fill();
+    }
+
+    // 碗脉搏光
+    if(pulseTimer>0||bowlGlow>0){
+        const ga=gameState==='win'?1:Math.max(pulseTimer,bowlGlow);
+        ctx.beginPath();ctx.arc(BOWL.x,BOWL.y,BOWL.radius+15,0,Math.PI*2);
+        ctx.fillStyle='rgba(255,215,0,'+(ga*0.3)+')';ctx.fill();
+    }
+    ctx.restore();
+
+    // ── 狗粮轨迹 ──
+    for(let k of kibbles){
+        if(!k.alive)continue;
+        if(k.trail.length<2)continue;
+        ctx.beginPath();
+        ctx.moveTo(k.trail[0].x,k.trail[0].y);
+        for(let t=1;t<k.trail.length;t++){
+            ctx.lineTo(k.trail[t].x,k.trail[t].y);
+        }
+        ctx.strokeStyle='rgba(180,140,100,0.3)';
+        ctx.lineWidth=k.radius*0.5;
+        ctx.stroke();
+    }
+
+    // ── 狗粮（精致不规则颗粒+3D质感）──
+    for(let k of kibbles){
+        if(!k.alive)continue;
+        const ga=0.12+Math.sin(Date.now()*0.004+k.phase)*0.06;
+        const cx2=k.x,cy2=k.y,rr=k.radius;
+        // 呼吸光晕
+        ctx.beginPath();ctx.arc(cx2,cy2,rr+4,0,Math.PI*2);
+        ctx.fillStyle='rgba(100,60,30,'+ga+')';ctx.fill();
+        // 底层深色轮廓
+        ctx.fillStyle='#3A1F08';
+        ctx.beginPath();ctx.ellipse(cx2,cy2+rr*0.08,rr*1.05,rr*0.75,0.2,0,Math.PI*2);ctx.fill();
+        // 主体：多椭圆叠加形成不规则颗粒
+        ctx.fillStyle='#5D3A2A';
+        ctx.beginPath();ctx.ellipse(cx2,cy2,rr,rr*0.72,0.2,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(cx2+rr*0.55,cy2-rr*0.12,rr*0.68,rr*0.58,-0.1,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(cx2-rr*0.48,cy2-rr*0.18,rr*0.58,rr*0.62,0.3,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(cx2+rr*0.22,cy2+rr*0.38,rr*0.52,rr*0.48,0.5,0,Math.PI*2);ctx.fill();
+        ctx.beginPath();ctx.ellipse(cx2-rr*0.22,cy2+rr*0.32,rr*0.5,rr*0.42,-0.4,0,Math.PI*2);ctx.fill();
+        // 表面纹理：散布小暗点
+        ctx.fillStyle='rgba(40,15,5,0.25)';
+        const seed=k.phase*100;
+        for(let t=0;t<4;t++){
+            const tx=cx2+Math.cos(seed+t*2.1)*rr*0.55;
+            const ty=cy2+Math.sin(seed+t*1.7)*rr*0.4;
+            ctx.beginPath();ctx.arc(tx,ty,rr*0.12,0,Math.PI*2);ctx.fill();
+        }
+        // 表面浅色斑点（烘烤效果）
+        ctx.fillStyle='rgba(140,100,60,0.3)';
+        for(let t=0;t<3;t++){
+            const tx=cx2+Math.cos(seed+t*2.5+1)*rr*0.45;
+            const ty=cy2+Math.sin(seed+t*1.9+1)*rr*0.35;
+            ctx.beginPath();ctx.arc(tx,ty,rr*0.08,0,Math.PI*2);ctx.fill();
+        }
+        // 主高光
+        ctx.fillStyle='rgba(200,160,100,0.35)';
+        ctx.beginPath();ctx.ellipse(cx2-rr*0.22,cy2-rr*0.38,rr*0.28,rr*0.13,-0.3,0,Math.PI*2);ctx.fill();
+        // 反光点
+        ctx.fillStyle='rgba(255,230,200,0.25)';
+        ctx.beginPath();ctx.arc(cx2-rr*0.35,cy2-rr*0.4,rr*0.1,0,Math.PI*2);ctx.fill();
+    }
+
+    // ── 拖拽 ──
+    if(dragging&&selected){
+        ctx.beginPath();
+        ctx.setLineDash([6,8]);
+        ctx.moveTo(dragFromX,dragFromY);
+        ctx.lineTo(dragToX,dragToY);
+        ctx.strokeStyle='rgba(255,220,150,0.7)';
+        ctx.lineWidth=2;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const adx=dragToX-dragFromX,ady=dragToY-dragFromY;
+        const ad=Math.hypot(adx,ady);
+        if(ad>8){
+            ctx.beginPath();
+            ctx.moveTo(dragToX,dragToY);
+            ctx.lineTo(dragToX-adx/ad*10-ady/ad*6,dragToY-ady/ad*10+adx/ad*6);
+            ctx.lineTo(dragToX-adx/ad*10+ady/ad*6,dragToY-ady/ad*10-adx/ad*6);
+            ctx.closePath();
+            ctx.fillStyle='rgba(255,220,150,0.7)';
+            ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(selected.x,selected.y,selected.radius+4,0,Math.PI*2);
+        ctx.strokeStyle='#FFD700';
+        ctx.lineWidth=2;
+        ctx.stroke();
+    }
+
+    // ── 粒子 ──
+    for(let p of particles){
+        ctx.beginPath();
+        ctx.arc(p.x,p.y,2*(p.life/0.3),0,Math.PI*2);
+        const hex=p.color,m=hex.match(/#(..)(..)(..)/);
+        if(m){
+            ctx.fillStyle='rgba('+parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16)+','+(p.life/0.3)+')';
+        }else{
+            ctx.fillStyle='rgba(255,255,255,'+(p.life/0.3)+')';
+        }
+        ctx.fill();
+    }
+
+    // ── +1 popup ──
+    for(let pp of popups){
+        ctx.fillStyle='rgba(255,215,0,'+(pp.life)+')';
+        ctx.font='bold 20px "Comic Sans MS","YouYuan",cursive,sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText(pp.text,pp.x,pp.y);
+    }
+
+    // ── UI ──
+    // 顶部提示
+    ctx.fillStyle='rgba(0,0,0,0.45)';
+    ctx.fillRect(W/2-160,8,320,30);
+    ctx.fillStyle='rgba(255,228,181,0.85)';
+    ctx.font='14px "Comic Sans MS","YouYuan",cursive,sans-serif';
+    ctx.textAlign='center';
+    ctx.fillText('拖拽狗粮 → 瞄向碗中 → 松手发射',W/2,30);
+    ctx.textAlign='left';
+
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(10,10,110,40);
+    ctx.fillStyle='#FFE4B5';
+    ctx.font='bold 22px "Comic Sans MS","YouYuan",cursive,sans-serif';
+    ctx.textAlign='left';
+    ctx.fillText('🥣 '+successCount+'/'+totalCount,18,42);
+
+    ctx.fillStyle='rgba(0,0,0,0.5)';
+    ctx.fillRect(W-130,10,120,40);
+    ctx.fillStyle='#FFE4B5';
+    ctx.textAlign='right';
+    ctx.fillText('⏱ '+timeLeft.toFixed(1)+'s',W-20,42);
+    ctx.textAlign='left';
+
+    // ── 结束 ──
+    if(gameState==='win'||gameState==='lose'){
+        ctx.fillStyle='rgba(0,0,0,0.75)';
+        ctx.fillRect(0,0,W,H);
+        ctx.fillStyle=gameState==='win'?'#FFD700':'#AA8866';
+        ctx.font='bold 26px "Comic Sans MS","YouYuan",cursive,sans-serif';
+        ctx.textAlign='center';
+        ctx.fillText(gameState==='win'?'……至少把它们收好了。':'……还是少了几粒。',W/2,H/2-10);
+        ctx.fillStyle='#DDD';
+        ctx.font='14px "Comic Sans MS","YouYuan",cursive,sans-serif';
+        ctx.fillText('按任意位置返回',W/2,H/2+25);
+        ctx.textAlign='left';
+    }
+
+    ctx.restore();
+}
+
+let lastTime=performance.now();
+function loop(time){
+    const dt=Math.min((time-lastTime)/1000,0.05);
+    lastTime=time;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

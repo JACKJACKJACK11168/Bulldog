@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>小八的家 - 第三人称</title>
+    <title>第二章 - 第三人称</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
         #info {
@@ -119,7 +119,7 @@
     </style>
 </head>
 <body>
-    <div id="info">🐶 小八的家 | 卧室 · 客厅 · 厨房 · 卫生间</div>
+    <div id="info">👤 小八的家 | 阴天 · 第二章</div>
     <div id="interact-hint">按 <kbd>E</kbd> 互动</div>
     <div id="action-feedback"></div>
     <div id="controls-hint">WASD 移动 · 空格 跳跃 · 鼠标拖动视角 · 滚轮缩放</div>
@@ -274,13 +274,13 @@
         document.body.appendChild(renderer.domElement);
 
         // ==================== 灯光 ====================
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        const ambientLight = new THREE.AmbientLight(0xccddee, 0.7);
         scene.add(ambientLight);
 
-        const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x8d7c6b, 0.6);
+        const hemiLight = new THREE.HemisphereLight(0xccddee, 0x667788, 0.5);
         scene.add(hemiLight);
 
-        const dirLight = new THREE.DirectionalLight(0xfff8e7, 0.6);
+        const dirLight = new THREE.DirectionalLight(0xeeeeff, 0.5);
         dirLight.position.set(3, 6, 5);
         dirLight.castShadow = true;
         dirLight.shadow.mapSize.width = 1024;
@@ -803,71 +803,45 @@
         console.log('📺 遥控器已放置在客厅桌子上！');
 
         // ==================== 法斗模型 ====================
-        const bulldogGroup = new THREE.Group();
+        const playerGroup = new THREE.Group();
 
-        gltfLoader.load('models/french_dog.glb', (gltf) => {
+        gltfLoader.load('models/zhurenxian.glb', (gltf) => {
             const model = gltf.scene;
-            model.scale.set(0.06, 0.06, 0.06);
-            model.position.y = 0.0;
             model.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
+                    child.material = child.material.clone();
+                    child.material.wireframe = false;
                 }
             });
-            bulldogGroup.add(model);
-            console.log('🐶 GLB法斗模型加载成功！');
-        }, undefined, (error) => {
-            console.error('❌ GLB加载失败:', error);
-        });
-
-        bulldogGroup.position.set(0, 0, 0);
-        scene.add(bulldogGroup);
-
-        // ==================== 主人模型 ====================
-        const ownerGroup = new THREE.Group();
-        gltfLoader.load('models/sofazhuren.glb', (gltf) => {
-            const ownerModel = gltf.scene;
-            ownerModel.scale.set(0.9, 0.9, 0.9);
-            ownerModel.rotation.y = Math.PI;
-            ownerModel.traverse((child) => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.receiveShadow = true;
-                }
-            });
-            // 计算实际包围盒并居中
-            const box = new THREE.Box3().setFromObject(ownerModel);
+            const box = new THREE.Box3().setFromObject(model);
+            const size = new THREE.Vector3();
+            box.getSize(size);
             const cx = (box.min.x + box.max.x) / 2;
             const cy = box.min.y;
             const cz = (box.min.z + box.max.z) / 2;
-            console.log('👤 主人包围盒: center=(' + cx.toFixed(2) + ',' + cy.toFixed(2) + ',' + cz.toFixed(2) + '), size=' + (box.max.x-box.min.x).toFixed(2) + 'x' + (box.max.y-box.min.y).toFixed(2) + 'x' + (box.max.z-box.min.z).toFixed(2));
-            // 居中模型
-            ownerModel.position.set(-cx, -cy, -cz);
-            ownerGroup.add(ownerModel);
-
-            // 生成手机模型（右手位置）
-            const phoneGroup = new THREE.Group();
-            const phoneBodyGeo = new THREE.BoxGeometry(0.08, 0.14, 0.01);
-            const phoneBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.3, roughness: 0.3 });
-            const phoneBody = new THREE.Mesh(phoneBodyGeo, phoneBodyMat);
-            phoneBody.castShadow = true;
-            phoneGroup.add(phoneBody);
-            // 屏幕
-            const screenGeo = new THREE.BoxGeometry(0.065, 0.1, 0.001);
-            const screenMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.1, roughness: 0.2, emissive: 0x111111, emissiveIntensity: 0.3 });
-            const screen = new THREE.Mesh(screenGeo, screenMat);
-            screen.position.z = 0.006;
-            phoneGroup.add(screen);
-            phoneGroup.position.set(-0.1, 0.75, -0.25);
-            phoneGroup.rotation.x = -Math.PI / 4;
-            ownerGroup.add(phoneGroup);
-            console.log('👤 主人模型加载成功！（已居中，含手机）');
+            console.log('📦 原始包围盒:',size.x.toFixed(3),'x',size.y.toFixed(3),'x',size.z.toFixed(3),'center:',cx.toFixed(3),cy.toFixed(3),cz.toFixed(3));
+            const targetH = 1.5;
+            const s = Math.min(targetH / Math.max(size.y, 0.01), 5);
+            console.log('  → scale:',s.toFixed(3));
+            model.scale.setScalar(s);
+            model.position.set(-cx * s, -cy * s, -cz * s);
+            playerGroup.add(model);
+            console.log('  → 最终位置:',model.position.x.toFixed(2),model.position.y.toFixed(2),model.position.z.toFixed(2));
+            console.log('👤 主人加载成功！');
         }, undefined, (error) => {
-            console.error('❌ 主人模型加载失败:', error);
+            console.error('❌ 主人加载失败:', error);
+            // 备用立方体
+            const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.5, 0.5), new THREE.MeshStandardMaterial({color:0xff4444}));
+            box.position.y = 0.75;
+            playerGroup.add(box);
         });
-        ownerGroup.position.set(1.9, 0, -1.23);
-        scene.add(ownerGroup);
+
+        playerGroup.position.set(0, 0, 0);
+        scene.add(playerGroup);
+
+        // 沙发主人模型已删除
 
         // ==================== 交互系统 ====================
         const hintEl = document.getElementById('interact-hint');
@@ -915,8 +889,8 @@
         // 计算法斗嘴部世界位置（基于法斗朝向 + 固定偏移）
         function getBulldogMouthPos() {
             const forward = new THREE.Vector3(0, 0, 0.30);
-            forward.applyQuaternion(bulldogGroup.quaternion);
-            const pos = bulldogGroup.position.clone().add(forward);
+            forward.applyQuaternion(playerGroup.quaternion);
+            const pos = playerGroup.position.clone().add(forward);
             pos.y += 0.40;
             return pos;
         }
@@ -928,7 +902,7 @@
             if (remoteSeqState === 'PICKUP') {
                 // 遥控器瞬移到法斗嘴部（基于模型包围盒）
                 remoteGroup.position.copy(getBulldogMouthPos());
-                remoteGroup.rotation.set(0.3, bulldogGroup.rotation.y + 0.2, 0);
+                remoteGroup.rotation.set(0.3, playerGroup.rotation.y + 0.2, 0);
                 remoteSeqState = 'SPIN';
                 remoteSeqSpinAngle = 0;
                 showFeedback('🐶 汪！汪！...');
@@ -937,16 +911,16 @@
             if (remoteSeqState === 'SPIN') {
                 const spinAmount = REMOTE_SEQUENCE.SPIN_SPEED * dt;
                 remoteSeqSpinAngle += spinAmount;
-                bulldogGroup.rotation.y += spinAmount;
+                playerGroup.rotation.y += spinAmount;
                 // 遥控器跟随嘴部位置
                 remoteGroup.position.copy(getBulldogMouthPos());
-                remoteGroup.rotation.set(0.3, bulldogGroup.rotation.y + 0.2, 0);
+                remoteGroup.rotation.set(0.3, playerGroup.rotation.y + 0.2, 0);
 
                 // 转圈时每隔一定角度叫一声
                 const prevQuarter = Math.floor((remoteSeqSpinAngle - spinAmount) / (Math.PI / 2));
                 const curQuarter = Math.floor(remoteSeqSpinAngle / (Math.PI / 2));
                 if (curQuarter > prevQuarter && remoteSeqSpinAngle < REMOTE_SEQUENCE.SPIN_TOTAL - 0.3) {
-                    playBark();
+                    // playBark removed
                 }
 
                 if (remoteSeqSpinAngle >= REMOTE_SEQUENCE.SPIN_TOTAL) {
@@ -968,34 +942,7 @@
             }
         }
 
-        // 主人NPC头部倾斜（低头看手机）
-        let ownerHeadBone = null;
-        function setupOwnerPose() {
-            if (!ownerGroup.children[0]) return;
-            let found = false;
-            ownerGroup.children[0].traverse((child) => {
-                if (child.isBone && (child.name.toLowerCase().includes('head') ||
-                    child.name.toLowerCase().includes('头') ||
-                    child.name.includes('_6') || child.name.includes('neck'))) {
-                    ownerHeadBone = child;
-                    child.rotation.x = Math.PI / 9; // 低头约20度
-                    found = true;
-                    console.log('👤 主人头部已倾斜！骨:', child.name);
-                }
-            });
-            // 没找到骨骼时不操作整个模型
-            if (!found) {
-                console.log('👤 未找到头部骨骼，保持原始姿态');
-            }
-        }
-        // 主人加载完成后设置姿态
-        (function waitOwner() {
-            if (ownerGroup.children.length > 0) {
-                setupOwnerPose();
-            } else {
-                setTimeout(waitOwner, 200);
-            }
-        })();
+        // 主人NPC已移除
 
         // 遥控器叼取闪回
         const flashbackFetchOverlay = (function() {
@@ -2202,7 +2149,7 @@
         }
 
         function checkInteraction() {
-            const playerPos = bulldogGroup.position;
+            const playerPos = playerGroup.position;
             let closestDist = Infinity, closestItem = null;
 
             // 检查病历
@@ -2226,19 +2173,7 @@
                     closestItem = {
                         id: 'leash',
                         name: '狗绳',
-                        action: () => {
-                            leashInteracted = true;
-                            localStorage.setItem('leashInteracted', 'true');
-                            leashGroup.traverse((child) => {
-                                if (child.isMesh && child.material.emissive !== undefined) {
-                                    child.material = child.material.clone();
-                                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                                    child.material.emissiveIntensity = 0.5;
-                                }
-                            });
-                            var w = window.open('knot_game.html','_blank','width=820,height=640');
-                            if (!w) window.location.href = 'knot_game.html';
-                        }
+                        action: () => triggerLeashFlashback()
                     };
                 }
             }
@@ -2467,10 +2402,7 @@
                     }
                     e.preventDefault();
                     break;
-                case 'KeyE':
-                    if (currentClosestItem) currentClosestItem.action();
-                    e.preventDefault();
-                    break;
+                
             }
         });
         document.addEventListener('keyup', (e) => {
@@ -2527,77 +2459,32 @@
                 const move = playerDir.clone().multiplyScalar(moveSpeed * dt);
 
                 // 先分轴移动，再各自做碰撞解算（防止角落卡死）
-                let newX = bulldogGroup.position.x + move.x;
-                let newZ = bulldogGroup.position.z + move.z;
+                let newX = playerGroup.position.x + move.x;
+                let newZ = playerGroup.position.z + move.z;
 
                 // 世界边界（四面外墙内侧）
                 newX = Math.max(-4.2, Math.min(4.2, newX));
                 newZ = Math.max(-4.2, Math.min(4.2, newZ));
 
                 // 碰撞解算：先只移动 X 轴
-                const afterX = resolveColliders(newX, bulldogGroup.position.z);
+                const afterX = resolveColliders(newX, playerGroup.position.z);
                 newX = afterX.x;
                 // 再只移动 Z 轴
                 const afterZ = resolveColliders(newX, newZ);
                 newZ = afterZ.z;
 
-                bulldogGroup.position.x = newX;
-                bulldogGroup.position.z = newZ;
+                playerGroup.position.x = newX;
+                playerGroup.position.z = newZ;
 
                 const targetAngle = Math.atan2(move.x, move.z);
-                let angleDiff = targetAngle - bulldogGroup.rotation.y;
+                let angleDiff = targetAngle - playerGroup.rotation.y;
                 while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
                 while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                bulldogGroup.rotation.y += angleDiff * Math.min(1, dt * 8);
+                playerGroup.rotation.y += angleDiff * Math.min(1, dt * 8);
             }
 
-            // ---- 卫生间区域自动抬升（走到碰撞体上自动站到0.2m高）----
-            const BATHROOM_RISE_Y = 0.2;
-            const bathroomCX = 2.5, bathroomCZ = 1.65, bathroomHW = 1.5, bathroomHD = 1.5;
-            const inBathroomArea = bulldogGroup.position.x >= bathroomCX - bathroomHW - playerRadius &&
-                                     bulldogGroup.position.x <= bathroomCX + bathroomHW + playerRadius &&
-                                     bulldogGroup.position.z >= bathroomCZ - bathroomHD - playerRadius &&
-                                     bulldogGroup.position.z <= bathroomCZ + bathroomHD + playerRadius;
-
-            // ---- 跳跃 / 重力 / 平台 ----
-            const prevY = bulldogGroup.position.y;
-            velocityY += gravity * dt;
-            bulldogGroup.position.y += velocityY * dt;
-            const curY = bulldogGroup.position.y;
-
-            const px = bulldogGroup.position.x;
-            const pz = bulldogGroup.position.z;
-            let landedPlatformY = -Infinity;
-
-            for (const c of colliders) {
-                if (c.platformTop > -Infinity && c.platformTop >= groundY) {
-                    if (px >= c.minX - playerRadius && px <= c.maxX + playerRadius &&
-                        pz >= c.minZ - playerRadius && pz <= c.maxZ + playerRadius) {
-                        if (prevY >= c.platformTop && curY <= c.platformTop) {
-                            landedPlatformY = Math.max(landedPlatformY, c.platformTop);
-                        }
-                    }
-                }
-            }
-
-            if (landedPlatformY > -Infinity) {
-                if (!isOnGround) playLandSound();
-                bulldogGroup.position.y = landedPlatformY;
-                velocityY = 0;
-                isOnGround = true;
-            } else if (inBathroomArea && bulldogGroup.position.y < BATHROOM_RISE_Y) {
-                if (!isOnGround) playLandSound();
-                bulldogGroup.position.y = BATHROOM_RISE_Y;
-                velocityY = 0;
-                isOnGround = true;
-            } else if (bulldogGroup.position.y <= groundY) {
-                if (!isOnGround) playLandSound();
-                bulldogGroup.position.y = groundY;
-                velocityY = 0;
-                isOnGround = true;
-            } else {
-                isOnGround = false;
-            }
+            // ---- 地面固定 ----
+            playerGroup.position.y = 0.05;
         }
 
         function updateCamera() {
@@ -2606,9 +2493,9 @@
             smoothDist += (cameraDistance - smoothDist) * smoothFactor;
 
             const target = new THREE.Vector3(
-                bulldogGroup.position.x,
-                bulldogGroup.position.y + 0.35,
-                bulldogGroup.position.z
+                playerGroup.position.x,
+                playerGroup.position.y + 0.35,
+                playerGroup.position.z
             );
 
             let camX = target.x + smoothDist * Math.sin(smoothYaw) * Math.cos(smoothPitch);
@@ -2645,49 +2532,36 @@
                 updateMovement(dt);
             }
             updateCamera();
-            updateInteractionHints();
+            
 
             // 实时位置显示
             const posEl = document.getElementById('pos-display');
             if (posEl) {
-                const p = bulldogGroup.position;
+                const p = playerGroup.position;
                 posEl.textContent = `X: ${p.x.toFixed(2)}  Z: ${p.z.toFixed(2)}  Y: ${p.y.toFixed(2)}`;
             }
 
             const time = Date.now() * 0.001;
             const isMoving = keyState.w || keyState.a || keyState.s || keyState.d;
 
-            if (bulldogGroup.children.length > 0 && bulldogGroup.children[0]) {
-                const model = bulldogGroup.children[0];
-                const modelBaseY = 0.28; // 模型相对于 bulldogGroup 的基础 Y
+            if (playerGroup.children.length > 0 && playerGroup.children[0]) {
+                const model = playerGroup.children[0];
 
-                if (!isOnGround) {
-                    // 空中：通过 bulldogGroup 做轻微拉伸，不碰 model.scale
-                    model.position.y = modelBaseY;
-                    model.rotation.x = 0;
-                    model.rotation.z = 0;
-                    const stretchY = velocityY > 0 ? 1.08 : 0.92;
-                    bulldogGroup.scale.set(1 / stretchY, stretchY, 1 / stretchY);
-                } else if (isMoving) {
+                if (isMoving) {
                     const prevSin = Math.sin(walkCycle);
-                    walkCycle += dt * 8;
+                    walkCycle += dt * 5;
                     const curSin = Math.sin(walkCycle);
-                    // 正弦波过零点触发脚步声
                     if ((prevSin <= 0 && curSin > 0) || (prevSin >= 0 && curSin < 0)) {
                         playFootstep();
                     }
-                    const bounce = Math.abs(curSin) * 0.03;
-                    model.position.y = modelBaseY + bounce;
-                    bulldogGroup.scale.set(1, 1, 1);
-                    model.rotation.x = curSin * 0.08;
-                    model.rotation.z = Math.sin(walkCycle * 2) * 0.04;
+                    model.rotation.x = curSin * 0.005;
+                    model.rotation.z = Math.sin(walkCycle * 2) * 0.003;
                 } else {
-                    model.position.y += (modelBaseY - model.position.y) * 0.1;
                     model.rotation.x += (0 - model.rotation.x) * 0.1;
                     model.rotation.z += (0 - model.rotation.z) * 0.1;
                     walkCycle = 0;
                     const breathe = 1 + Math.sin(time * 3) * 0.015;
-                    bulldogGroup.scale.set(breathe, breathe, breathe);
+                    playerGroup.scale.set(breathe, breathe, breathe);
                 }
             }
 
@@ -2695,7 +2569,7 @@
         }
         animate();
 
-        console.log('🐶 小八的家已加载！第三人称视角 | WASD移动 | 鼠标拖动旋转 | 滚轮缩放 | E键互动');
+        console.log('🐶 第二章已加载 | WASD移动 | 鼠标拖动旋转 | 滚轮缩放 | E键互动');
     </script>
 </body>
 </html>

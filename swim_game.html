@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>游泳圈扑腾 - 夏日河湾</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;cursor:crosshair}
+canvas{display:block}
+#ui{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+#progress-box{position:absolute;top:20px;left:20px;color:#FFE4B5;font-size:15px}
+#progress-bar-bg{width:180px;height:8px;background:rgba(255,255,255,0.12);border-radius:4px;margin-top:6px}
+#progress-bar-fg{height:100%;border-radius:4px;background:linear-gradient(90deg,#FF6B6B,#FFD93D,#6BCB77);width:100%;transition:width 0.2s}
+#timer{position:absolute;top:20px;left:50%;transform:translateX(-50%);color:#FFE4B5;font-size:18px;font-weight:bold}
+#hint{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);color:rgba(255,228,181,0.8);font-size:16px;transition:opacity 0.5s}
+#stage-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#FFE4B5;font-size:26px;text-shadow:0 0 15px rgba(255,228,181,0.5);opacity:0;transition:opacity 0.6s;text-align:center;line-height:1.5}
+#end-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#FFE4B5;font-size:clamp(20px,4vw,30px);text-shadow:0 0 20px rgba(255,228,181,0.6);opacity:0;text-align:center;line-height:1.5;pointer-events:auto}
+#retry-btn{position:absolute;top:60%;left:50%;transform:translate(-50%,-50%);background:rgba(255,228,181,0.15);color:#FFE4B5;border:2px solid rgba(255,228,181,0.5);padding:12px 30px;border-radius:20px;font-size:16px;font-family:inherit;cursor:pointer;opacity:0;transition:all 0.3s;pointer-events:auto;display:none}
+#retry-btn:hover{background:rgba(255,228,181,0.3)}
+</style>
+</head>
+<body>
+<div id="ui">
+  <div id="progress-box">
+    <span id="progress-txt">距离主人: 100%</span>
+    <div id="progress-bar-bg"><div id="progress-bar-fg"></div></div>
+  </div>
+  <div id="timer">⏱ 00:00 / 02:00</div>
+  <div id="hint">🖱 按住鼠标拖拽控制方向 | 逆流会推你后退</div>
+  <div id="stage-msg"></div>
+  <div id="end-msg"></div>
+  <button id="retry-btn" onclick="resetGame()">🔄 再试一次</button>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// ─── DOM ────────────────────────────
+const progressTxt=document.getElementById('progress-txt');
+const progressFg=document.getElementById('progress-bar-fg');
+const timerEl=document.getElementById('timer');
+const hintEl=document.getElementById('hint');
+const stageMsg=document.getElementById('stage-msg');
+const endMsg=document.getElementById('end-msg');
+const retryBtn=document.getElementById('retry-btn');
+
+// ─── 常量 ────────────────────────────
+const WATER_SIZE=70;
+const RIVER_WIDTH=8;
+const RIVER_HALF=RIVER_WIDTH/2;
+const TOTAL_TIME=40;
+const WIN_DIST=1.5;
+const SPEED=2.0;
+const INERTIA=0.92;
+const DRIFT_SPEED=0.5;
+const MASTER_POS=new THREE.Vector3(RIVER_HALF+1,0.5,33);
+const DOG_START=new THREE.Vector3(0,0.5,-30);
+
+// ─── 场景 ────────────────────────────
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#87CEEB');
+scene.fog=null;
+
+const camera=new THREE.PerspectiveCamera(55,window.innerWidth/window.innerHeight,0.5,100);
+camera.position.set(0,15,DOG_START.z);
+camera.lookAt(0,0,DOG_START.z+3);
+
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth,window.innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+document.body.appendChild(renderer.domElement);
+
+// ─── 光照 ────────────────────────────
+const ambient=new THREE.AmbientLight('#ffe8c0',1.8);
+scene.add(ambient);
+const sun=new THREE.DirectionalLight('#FFF5E0',6);
+sun.position.set(10,25,5);
+sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.near=0.5; sun.shadow.camera.far=80;
+sun.shadow.camera.left=-25; sun.shadow.camera.right=25;
+sun.shadow.camera.top=25; sun.shadow.camera.bottom=-25;
+scene.add(sun);
+const hemi=new THREE.HemisphereLight('#87CEEB','#4a7a4a',0.5);
+scene.add(hemi);
+
+// ─── 河岸地面 ──────────────────────────
+const groundGeo=new THREE.PlaneGeometry(WATER_SIZE+8,WATER_SIZE+8);
+groundGeo.rotateX(-Math.PI/2);
+const groundMat=new THREE.MeshStandardMaterial({color:'#1a4a7a',roughness:0.7});
+const ground=new THREE.Mesh(groundGeo,groundMat);
+ground.position.y=-0.1;
+ground.receiveShadow=true;
+ground.renderOrder=0;
+scene.add(ground);
+
+// ─── 河道水面（窄长河流） ──────────────────
+const riverGeo=new THREE.PlaneGeometry(RIVER_WIDTH,WATER_SIZE,40,100);
+riverGeo.rotateX(-Math.PI/2);
+const riverMat=new THREE.MeshBasicMaterial({color:'#0d3260'});
+const river=new THREE.Mesh(riverGeo,riverMat);
+river.position.y=0.06;
+river.renderOrder=2;
+river.material.depthTest=true;
+river.material.depthWrite=false;
+scene.add(river);
+
+// ─── 河堤（坡岸+芦苇+野花） ──────────
+function createRiverBank(side){
+  const dir=side==='left'?-1:1;
+  const bankX=dir*(RIVER_HALF+0.5);
+  const g=new THREE.Group();
+  const matDirt=new THREE.MeshStandardMaterial({color:'#7B5B3A',roughness:0.9});
+  const matGrass=new THREE.MeshStandardMaterial({color:'#3a6a2a',roughness:0.8});
+  for(let row=0;row<3;row++){
+    const bx=bankX+dir*(0.4*row);
+    const h=0.15+row*0.08;
+    const bank=new THREE.Mesh(new THREE.BoxGeometry(1.0,0.1,WATER_SIZE),row<2?matDirt:matGrass);
+    bank.position.set(bx,h,0);
+    bank.castShadow=true; bank.receiveShadow=true;
+    g.add(bank);
+  }
+  for(let i=0;i<35;i++){
+    const reedG=new THREE.Group();
+    const reedH=0.4+Math.random()*0.8;
+    reedG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.02,reedH,5),new THREE.MeshStandardMaterial({color:'#9ab87a',roughness:0.6}))).position.y=reedH/2;
+    reedG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.06,0.12,6),new THREE.MeshStandardMaterial({color:'#b8a860',roughness:0.5}))).position.y=reedH+0.04;
+    reedG.position.set(bankX+dir*0.5+dir*Math.random()*0.8,0.15+Math.random()*0.15,i*WATER_SIZE/35-WATER_SIZE/2+Math.random()*0.8);
+    reedG.rotation.x=(Math.random()-0.5)*0.3;
+    reedG.rotation.z=(Math.random()-0.5)*0.2;
+    g.add(reedG);
+  }
+  for(let i=0;i<20;i++){
+    const flowerG=new THREE.Group();
+    flowerG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.01,0.015,0.2+Math.random()*0.3,5),new THREE.MeshStandardMaterial({color:'#6a8a40',roughness:0.6}))).position.y=0.1;
+    for(let p=0;p<5;p++){
+      flowerG.add(new THREE.Mesh(new THREE.SphereGeometry(0.03,4,3),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(0.05+Math.random()*0.15,0.7,0.5+Math.random()*0.5),roughness:0.5}))).position.set(Math.cos(p*1.26)*0.04,0.2,Math.sin(p*1.26)*0.04);
+    }
+    flowerG.position.set(bankX+dir*0.7+dir*Math.random()*0.6,0.1,i*WATER_SIZE/20-WATER_SIZE/2+Math.random()*0.8);
+    g.add(flowerG);
+  }
+  g.position.set(0,0,0);
+  scene.add(g);
+}
+createRiverBank('left');
+createRiverBank('right');
+
+// ─── 水流粒子 ────────────────────────────
+const flowParticles=[];
+const flowGeoSmall=new THREE.SphereGeometry(0.04,4,2);
+const flowGeoMed=new THREE.SphereGeometry(0.08,4,2);
+for(let i=0;i<100;i++){
+  const isBubble=i<30;
+  const mat=new THREE.MeshBasicMaterial({
+    color:new THREE.Color().setHSL(isBubble?0.55:0.58,0.6,isBubble?0.4+Math.random()*0.3:0.25+Math.random()*0.2),
+    transparent:true, opacity:isBubble?0.5:0.25+Math.random()*0.25
+  });
+  const p=new THREE.Mesh(isBubble?flowGeoMed:flowGeoSmall,mat);
+  p.position.set(
+    (Math.random()-0.5)*RIVER_WIDTH*0.8,
+    -0.01+Math.random()*0.03,
+    DOG_START.z+Math.random()*(MASTER_POS.z-DOG_START.z+4)
+  );
+  p.userData={speed:1.0+Math.random()*2.5,phase:Math.random()*Math.PI*2,baseX:p.position.x,isBubble};
+  scene.add(p);
+  flowParticles.push(p);
+}
+
+// ─── 水面泡沫线 ────────────────────────────
+const foamLines=[];
+for(let i=0;i<15;i++){
+  const lineGeo=new THREE.BoxGeometry(0.04,0.01,0.3+Math.random()*0.6);
+  const lineMat=new THREE.MeshBasicMaterial({
+    color:'#d0e8f8', transparent:true, opacity:0.4+Math.random()*0.3
+  });
+  const line=new THREE.Mesh(lineGeo,lineMat);
+  line.position.set(
+    (Math.random()-0.5)*RIVER_WIDTH*0.7,
+    0.04,
+    DOG_START.z+Math.random()*(MASTER_POS.z-DOG_START.z+4)
+  );
+  line.userData={speed:1.2+Math.random()*2.0};
+  scene.add(line);
+  foamLines.push(line);
+}
+
+// ─── 灌木（不创建树木） ──────────────────
+function createBush(x,z){
+  const g=new THREE.Group();
+  const count=2+Math.floor(Math.random()*3);
+  for(let i=0;i<count;i++){
+    const r=0.2+Math.random()*0.3;
+    const bush=new THREE.Mesh(new THREE.SphereGeometry(r,6,4),new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(0.2+Math.random()*0.1,0.5,0.2+Math.random()*0.15),roughness:0.7}));
+    bush.position.set((Math.random()-0.5)*0.3,0.1,(Math.random()-0.5)*0.3);
+    bush.scale.y=0.7;
+    bush.castShadow=true;
+    g.add(bush);
+  }
+  g.position.set(x,0,z);
+  scene.add(g);
+}
+
+const bushEdge=RIVER_HALF+1.5;
+for(let i=0;i<40;i++){
+  const sideZ=DOG_START.z-2+i*(WATER_SIZE/40);
+  createBush(-bushEdge-Math.random()*2,sideZ);
+  createBush(bushEdge+Math.random()*2,sideZ);
+}
+
+// ─── 生成蓝白条纹游泳圈 ──────────────────
+function createSwimRing(){
+  const g=new THREE.Group();
+  const outerR=0.32, tubeR=0.05, segs=48;
+  const torusGeo=new THREE.TorusGeometry(outerR,tubeR,segs,16);
+
+  // 蓝白条纹：用顶点颜色
+  const colors=[];
+  const pos=torusGeo.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const x=pos.getX(i),z=pos.getZ(i);
+    const angle=Math.atan2(z,x);
+    const stripeIdx=Math.floor((angle/(Math.PI*2)+0.05)*8)%8;
+    const c=stripeIdx%2===0?[0.17,0.48,0.74]:[0.91,0.93,0.95];
+    colors.push(...c);
+  }
+  torusGeo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+  const torusMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:0.4,metalness:0.05});
+  const ring=new THREE.Mesh(torusGeo,torusMat);
+  ring.rotation.x=Math.PI/2;
+  ring.castShadow=true;
+  g.add(ring);
+
+  // 内高光
+  const hiGeo=new THREE.TorusGeometry(outerR-0.02,tubeR*0.3,segs,12);
+  const hiMat=new THREE.MeshStandardMaterial({color:'#ffffff',roughness:0.2,metalness:0.1,transparent:true,opacity:0.25});
+  const hiRing=new THREE.Mesh(hiGeo,hiMat);
+  hiRing.rotation.x=Math.PI/2;
+  g.add(hiRing);
+
+  return g;
+}
+
+// ─── 精致障碍物生成 ────────────────────
+const obstacles=[];
+function createLilypad(x,z){
+  const g=new THREE.Group();
+  // 平放水面上
+  const bodyGeo=new THREE.CylinderGeometry(0.35,0.4,0.03,16);
+  const bodyMat=new THREE.MeshStandardMaterial({
+    color:new THREE.Color().setHSL(0.22+Math.random()*0.06,0.65,0.25+Math.random()*0.12),
+    roughness:0.55
+  });
+  const body=new THREE.Mesh(bodyGeo,bodyMat);
+  body.castShadow=true;
+  g.add(body);
+
+  for(let j=0;j<5;j++){
+    const ang=(j/5)*Math.PI*2;
+    const vein=new THREE.Mesh(new THREE.BoxGeometry(0.01,0.003,0.2),
+      new THREE.MeshStandardMaterial({color:'#2d5a1e',roughness:0.7}));
+    vein.position.set(Math.cos(ang)*0.12,0.02,Math.sin(ang)*0.12);
+    vein.rotation.y=-ang;
+    g.add(vein);
+  }
+  if(Math.random()<0.3){
+    for(let k=0;k<3;k++){
+      const petal=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.06,5),
+        new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(0.92,0.6,0.7+Math.random()*0.3),roughness:0.5}));
+      const pa=(k/3)*Math.PI*2;
+      petal.position.set(Math.cos(pa)*0.08,0.04,Math.sin(pa)*0.08);
+      petal.rotation.z=0.4;
+      g.add(petal);
+    }
+  }
+  g.position.set(x,0.03,z);
+  g.userData={type:'lilypad',radius:0.4,baseY:0.03};
+  scene.add(g);
+  obstacles.push(g);
+}
+
+function createBranch(x,z){
+  const g=new THREE.Group();
+  // 平放在水面
+  const len=1.0+Math.random()*1.2;
+  const mainGeo=new THREE.CylinderGeometry(0.04,0.06,len,8);
+  const mainMat=new THREE.MeshStandardMaterial({color:'#6B4226',roughness:0.75});
+  const main=new THREE.Mesh(mainGeo,mainMat);
+  main.rotation.z=Math.PI/2;
+  main.position.y=0.02;
+  main.castShadow=true;
+  g.add(main);
+
+  for(let j=0;j<3;j++){
+    const brLen=0.2+Math.random()*0.3;
+    const br=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.03,brLen,6),mainMat.clone());
+    br.rotation.z=Math.PI/2+(Math.random()-0.5)*0.8;
+    br.position.set((Math.random()-0.5)*len*0.3,0.02,len*(0.3+j*0.2));
+    g.add(br);
+  }
+  g.position.set(x,0.02,z);
+  g.rotation.y=Math.random()*Math.PI*2;
+  g.userData={type:'branch',radius:0.3};
+  scene.add(g);
+  obstacles.push(g);
+}
+
+function createSeaweed(x,z){
+  const g=new THREE.Group();
+  const bladeCount=3+Math.floor(Math.random()*4);
+  for(let j=0;j<bladeCount;j++){
+    const h=0.3+Math.random()*0.4;
+    // 平放细长条
+    const blade=new THREE.Mesh(
+      new THREE.BoxGeometry(0.03,0.01,h),
+      new THREE.MeshStandardMaterial({color:new THREE.Color().setHSL(0.25+Math.random()*0.1,0.7,0.2+Math.random()*0.1),roughness:0.6})
+    );
+    blade.position.set((Math.random()-0.5)*0.15,0.015,(Math.random()-0.5)*0.15);
+    blade.rotation.y=Math.random()*Math.PI*2;
+    g.add(blade);
+  }
+  g.position.set(x,0.02,z);
+  g.userData={type:'seaweed',radius:0.25,slow:true,swayOffset:Math.random()*Math.PI*2};
+  scene.add(g);
+  obstacles.push(g);
+}
+
+function spawnObstacles(){
+  const riverLen=MASTER_POS.z-DOG_START.z;
+  for(let i=0;i<6;i++){
+    const x=(Math.random()-0.5)*RIVER_WIDTH*0.8;
+    const z=DOG_START.z+Math.random()*riverLen;
+    createLilypad(x,z);
+  }
+  for(let i=0;i<5;i++){
+    const x=(Math.random()-0.5)*RIVER_WIDTH*0.7;
+    const z=DOG_START.z+Math.random()*riverLen;
+    createBranch(x,z);
+  }
+  for(let i=0;i<4;i++){
+    const x=(Math.random()-0.5)*RIVER_WIDTH*0.6;
+    const z=DOG_START.z+Math.random()*riverLen;
+    createSeaweed(x,z);
+  }
+}
+spawnObstacles();
+
+// ─── 边界（河道范围） ────────────────────
+const boundary={minX:-RIVER_HALF+0.4,maxX:RIVER_HALF-0.4,minZ:DOG_START.z-1,maxZ:MASTER_POS.z+1};
+
+// ─── 游戏状态 ──────────────────────────
+let dogPos=DOG_START.clone();
+let dogVel=new THREE.Vector3();
+let dogAngle=0;
+let startTime=0, elapsedTime=0;
+let isDragging=false;
+let dragWorldDir=new THREE.Vector3();
+let totalDist=dogPos.distanceTo(MASTER_POS);
+let gameState='playing'; // playing|win|lose
+let stateTimer=0;
+let slowTimer=0;
+let pawPhase=0;
+let spawnTimer=0;
+let hasMovedForward=false; // 是否已向前移动过
+const START_LINE=DOG_START.z+0.5; // 起点线
+const SPAWN_INTERVAL=1.2;
+
+// ─── 角色引用 ──────────────────────────
+let dogGroup, swimRingGroup, masterGroup;
+let stageMsgTimeout=null;
+
+// ─── 加载模型 ──────────────────────────
+const loader=new GLTFLoader();
+const assets={dog:null,master:null};
+
+// 加载主人模型
+loader.load('models/swimzhu.glb',(gltf)=>{
+  assets.master=gltf.scene;
+  assets.master.scale.setScalar(1.5);
+  assets.master.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true}});
+  // 计算包围盒并居中
+  const box=new THREE.Box3().setFromObject(assets.master);
+  const cx=(box.min.x+box.max.x)/2;
+  const cy=box.min.y;
+  const cz=(box.min.z+box.max.z)/2;
+  assets.master.position.set(-cx,-cy,-cz);
+  assets.master.rotation.y=-Math.PI/2;
+
+  masterGroup=new THREE.Group();
+  masterGroup.position.copy(MASTER_POS);
+  masterGroup.add(assets.master);
+  scene.add(masterGroup);
+  console.log('👤 主人模型加载成功！位置:('+MASTER_POS.x.toFixed(1)+','+MASTER_POS.y.toFixed(1)+','+MASTER_POS.z.toFixed(1)+')');
+});
+
+// 加载法斗
+loader.load('models/french_dog.glb',(gltf)=>{
+  assets.dog=gltf.scene;
+  assets.dog.scale.set(0.09,0.09,0.09);
+  assets.dog.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true}});
+
+  // 创建法斗+泳圈组合
+  dogGroup=new THREE.Group();
+  dogGroup.add(assets.dog);
+
+  swimRingGroup=createSwimRing();
+  swimRingGroup.position.y=0.06;
+  dogGroup.add(swimRingGroup);
+
+  dogGroup.position.copy(dogPos);
+  scene.add(dogGroup);
+
+  // 开始游戏
+  startTime=performance.now();
+  console.log('🐶 游戏开始！');
+});
+
+// ─── 阶段文字提示 ──────────────────────
+function showStageMsg(text,dur=2){
+  if(stageMsgTimeout)clearTimeout(stageMsgTimeout);
+  stageMsg.textContent=text;
+  stageMsg.style.opacity='1';
+  stageMsgTimeout=setTimeout(()=>{stageMsg.style.opacity='0'},dur*1000);
+}
+
+// ─── 粒子（爱心/气泡效果） ───────────────
+const particles=[];
+function spawnParticle(x,y,z,type='heart'){
+  const geo=type==='heart'?new THREE.SphereGeometry(0.08,4,4):new THREE.SphereGeometry(0.05,4,4);
+  const mat=new THREE.MeshBasicMaterial({
+    color:type==='heart'?'#FFB6C1':'#FFE4B5',
+    transparent:true,opacity:0.7
+  });
+  const p=new THREE.Mesh(geo,mat);
+  p.position.set(x+Math.random()*0.3,y+Math.random()*0.3,z+Math.random()*0.3);
+  p.userData={life:2,vy:0.5+Math.random()*1};
+  scene.add(p);
+  particles.push(p);
+}
+
+// ─── 鼠标拖拽移动 ──────────────────────
+let mouseWorldTarget=new THREE.Vector3();
+
+renderer.domElement.addEventListener('mousedown',(e)=>{
+  if(e.button===0&&gameState==='playing'){
+    isDragging=true;hintEl.style.opacity='0';
+  }
+});
+window.addEventListener('mouseup',()=>{isDragging=false});
+renderer.domElement.addEventListener('mouseleave',()=>{isDragging=false});
+
+renderer.domElement.addEventListener('mousemove',(e)=>{
+  if(!isDragging||gameState!=='playing')return;
+  const rect=renderer.domElement.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)/rect.width*2-1;
+  const my=-(e.clientY-rect.top)/rect.height*2+1;
+
+  // 屏幕坐标→世界XZ（俯视投影）
+  const ray=new THREE.Raycaster();
+  ray.setFromCamera(new THREE.Vector2(mx,my),camera);
+  const plane=new THREE.Plane(new THREE.Vector3(0,1,0),-0.05);
+  const hit=new THREE.Vector3();
+  if(ray.ray.intersectPlane(plane,hit)){
+    dragWorldDir.set(hit.x-dogPos.x,0,hit.z-dogPos.z);
+    if(dragWorldDir.length()>0.01)dragWorldDir.normalize();
+  }
+});
+
+// ─── 物理更新 ──────────────────────────
+function updatePhysics(dt){
+  if(isDragging&&dragWorldDir.length()>0.01){
+    dogVel.x=dragWorldDir.x*SPEED;
+    dogVel.z=dragWorldDir.z*SPEED;
+  }else{
+    // 不操作时惯性衰减+逆流推回（不超边界）
+    dogVel.x*=INERTIA;
+    dogVel.z*=INERTIA;
+    if(dogPos.z>boundary.minZ+0.1){
+      dogPos.z-=DRIFT_SPEED*dt;
+      dogVel.z=Math.min(dogVel.z,-0.1);
+    }
+  }
+
+  // 急停效果
+  if(stunTimer>0){
+    stunTimer-=dt;
+    if(stunTimer<=0){stunTimer=0;}
+    return; // 被定住时不移动
+  }
+  const spdMult=slowTimer>0?0.5:1;
+  slowTimer=Math.max(0,slowTimer-dt);
+
+  dogPos.x+=dogVel.x*spdMult*dt;
+  dogPos.z+=dogVel.z*spdMult*dt;
+
+  // 法斗始终面朝主人方向（+Z），不随移动方向改变
+
+  dogPos.x=Math.max(boundary.minX,Math.min(boundary.maxX,dogPos.x));
+  dogPos.z=Math.max(boundary.minZ,Math.min(boundary.maxZ,dogPos.z));
+}
+
+// ─── 碰撞检测 ──────────────────────────
+let stunTimer=0;
+let stunDirX=0, stunDirZ=0;
+function checkObstacles(){
+  const dogRad=0.5;
+  for(let i=obstacles.length-1;i>=0;i--){
+    const obs=obstacles[i];
+    if(obs.userData.hit)continue;
+    const dx=dogPos.x-obs.position.x;
+    const dz=dogPos.z-obs.position.z;
+    const dist=Math.sqrt(dx*dx+dz*dz);
+    const rad=obs.userData.radius||0.4;
+
+    if(dist<dogRad+rad){
+      if(obs.userData.type==='lilypad'){
+        // 荷叶：急停0.2秒 + 下沉弹回 + 后退0.3
+        stunTimer=0.2;
+        const nx=dx/dist, nz=dz/dist;
+        stunDirX=nx*1.5; stunDirZ=nz*1.5;
+        dogVel.set(0,0,0);
+        // 荷叶下沉动画
+        obs.userData.sinking=true;
+        obs.userData.sinkTimer=0;
+        obs.userData.baseY=obs.position.y;
+      }else if(obs.userData.type==='branch'){
+        // 树枝：断裂消失 + 急停0.4秒
+        stunTimer=0.4;
+        dogVel.set(0,0,0);
+        // 碎成两半飞走
+        const half1=obs.clone();
+        half1.position.copy(obs.position);
+        half1.position.x+=0.2; half1.position.z+=0.1;
+        half1.userData={debris:true,life:0.5,vx:1.5,vy:0.3,vz:1.0};
+        scene.add(half1);
+        obstacles.push(half1);
+
+        const half2=obs.clone();
+        half2.position.copy(obs.position);
+        half2.position.x-=0.2; half2.position.z-=0.1;
+        half2.userData={debris:true,life:0.5,vx:-1.5,vy:0.3,vz:-1.0};
+        scene.add(half2);
+        obstacles.push(half2);
+
+        scene.remove(obs);
+        obstacles[i]='__remove__';
+      }else if(obs.userData.type==='seaweed'){
+        slowTimer=1.5;
+      }
+    }
+  }
+  for(let i=obstacles.length-1;i>=0;i--){
+    if(obstacles[i]==='__remove__')obstacles.splice(i,1);
+  }
+}
+
+// ─── 动画循环 ──────────────────────────
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),0.1);
+
+  if(gameState==='playing'){
+    elapsedTime=performance.now()-startTime;
+
+    updatePhysics(dt);
+    checkObstacles();
+
+    // 更新法斗位置
+    if(dogGroup){
+      dogGroup.position.copy(dogPos);
+      dogGroup.rotation.y=dogAngle;
+      // 呼吸起伏
+      dogGroup.position.y=0.5+Math.sin(elapsedTime*0.003)*0.04;
+      // 划水动画
+      pawPhase+=dt*(dogVel.length()>0.1?8:2);
+      if(assets.dog){
+        const dog=assets.dog;
+        const pawBounce=Math.abs(Math.sin(pawPhase))*0.04;
+        dog.position.y=0+Math.sin(elapsedTime*0.004)*0.02;
+        // 前爪摆动
+        dog.children.forEach((c,i)=>{
+          if(i===0||i===1)c.rotation.z=Math.sin(pawPhase+i*Math.PI)*0.15;
+        });
+      }
+    }
+
+    // 起点回退判定
+    if(dogPos.z>START_LINE)hasMovedForward=true;
+    if(hasMovedForward&&dogPos.z<DOG_START.z-0.3){
+      gameState='lose'; stateTimer=0;
+    }
+
+    // 距离计算
+    const dist=dogPos.distanceTo(MASTER_POS);
+    const progressPct=Math.max(0,Math.min(100,(dist/totalDist)*100));
+    progressTxt.textContent=`距离主人: ${Math.round(progressPct)}%`;
+    progressFg.style.width=progressPct+'%';
+
+    // 计时器
+    const sec=elapsedTime/1000;
+    const min=Math.floor(sec/60),s=Math.floor(sec%60);
+    timerEl.textContent=`⏱ ${String(min).padStart(2,'0')}:${String(s).padStart(2,'0')} / 00:40`;
+
+    // 主人距离反馈
+    if(masterGroup){
+      // 光柱效果
+      if(progressPct<=50){
+        if(!masterGroup.userData.lightPillar){
+          const pGeo=new THREE.CylinderGeometry(0.3,0.3,5,8);
+          const pMat=new THREE.MeshBasicMaterial({color:'#FFE4B5',transparent:true,opacity:0.3});
+          const pillar=new THREE.Mesh(pGeo,pMat);
+          pillar.position.set(MASTER_POS.x,MASTER_POS.y+2.5,MASTER_POS.z);
+          pillar.userData.isPillar=true;
+          masterGroup.userData.lightPillar=pillar;
+          scene.add(pillar);
+        }
+        const pill=masterGroup.userData.lightPillar;
+        if(pill){
+          pill.material.opacity=progressPct<=20?0.2+Math.sin(elapsedTime*0.005)*0.2:0.3;
+        }
+      }else if(masterGroup.userData.lightPillar){
+        scene.remove(masterGroup.userData.lightPillar);
+        masterGroup.userData.lightPillar=null;
+      }
+
+      // 爱心粒子
+      if(progressPct<=50&&Math.random()<0.03){
+        spawnParticle(MASTER_POS.x,MASTER_POS.y+1.5,MASTER_POS.z,'heart');
+      }
+    }
+
+    // 胜利判定
+    if(dist<WIN_DIST){
+      gameState='win'; stateTimer=0;
+      // 暖色光晕
+      if(masterGroup){
+        const glow=new THREE.PointLight('#FFD700',3,5);
+        masterGroup.add(glow);
+        masterGroup.userData.glow=glow;
+      }
+    }
+
+    // 失败判定
+    if(sec>=TOTAL_TIME){
+      gameState='lose'; stateTimer=0;
+    }
+
+    // 更新河道水波
+    const rPosArr=riverGeo.attributes.position;
+    const time=elapsedTime*0.001;
+    for(let i=0;i<rPosArr.count;i++){
+      const x=rPosArr.getX(i),z=rPosArr.getY(i);
+      const wave=Math.sin(x*0.8+time*1.5)*0.12+Math.cos(z*0.7+time*1.0)*0.1+Math.sin((x+z)*0.5+time*2)*0.06;
+      rPosArr.setZ(i,wave);
+    }
+    riverGeo.attributes.position.needsUpdate=true;
+
+    // 水流粒子动画（流向-Z，与目标反向）
+    flowParticles.forEach(p=>{
+      p.position.z-=p.userData.speed*dt;
+      p.position.x=p.userData.baseX+Math.sin(time*2+p.userData.phase)*0.25;
+      if(p.position.z<DOG_START.z-4)p.position.z=MASTER_POS.z+3;
+      p.material.opacity=p.userData.isBubble?0.4+Math.sin(time*2.5+p.userData.phase)*0.15:0.2+Math.sin(time*3+p.userData.phase)*0.12;
+    });
+
+    // 泡沫线漂移（流向-Z）
+    foamLines.forEach(l=>{
+      l.position.z-=l.userData.speed*dt;
+      l.position.x+=Math.sin(time*1.5+l.position.x)*0.15*dt;
+      if(l.position.z<DOG_START.z-4)l.position.z=MASTER_POS.z+3;
+    });
+
+    // 障碍物动画 + 逆流漂移（流向-Z）
+    const driftSpeed=0.55;
+    for(let i=obstacles.length-1;i>=0;i--){
+      const obs=obstacles[i];
+      if(!obs)continue;
+
+      // 碎片飞走
+      if(obs.userData.debris){
+        obs.position.x+=obs.userData.vx*dt;
+        obs.position.y+=obs.userData.vy*dt;
+        obs.position.z+=obs.userData.vz*dt;
+        obs.userData.vy-=2*dt;
+        obs.userData.life-=dt;
+        obs.rotation.x+=5*dt; obs.rotation.z+=3*dt;
+        if(obs.userData.life<=0){
+          scene.remove(obs); obstacles.splice(i,1);
+        }
+        continue;
+      }
+
+      // 荷叶下沉弹回
+      if(obs.userData.sinking){
+        obs.userData.sinkTimer+=dt;
+        const t=obs.userData.sinkTimer/0.3;
+        if(t<1){
+          obs.position.y=obs.userData.baseY-t*(1-t)*4*0.08;
+        }else{
+          obs.position.y=obs.userData.baseY;
+          obs.userData.sinking=false;
+        }
+      }
+
+      obs.position.z-=driftSpeed*dt;
+      if(obs.userData.type==='seaweed'){
+        obs.children.forEach(c=>{
+          c.rotation.z=Math.sin(time*3+obs.userData.swayOffset)*0.3;
+          c.rotation.x=Math.cos(time*2.5+obs.userData.swayOffset)*0.15;
+        });
+      }
+      if(obs.position.z<DOG_START.z-5){
+        obs.position.z=DOG_START.z+Math.random()*(MASTER_POS.z-DOG_START.z);
+        obs.position.x=(Math.random()-0.5)*RIVER_WIDTH*0.7;
+      }
+    }
+
+    // 急停后退效果
+    if(stunTimer>0){
+      const pushStr=stunTimer/0.3;
+      dogPos.x+=stunDirX*pushStr*dt*8;
+      dogPos.z+=stunDirZ*pushStr*dt*8;
+      dogPos.x=Math.max(boundary.minX,Math.min(boundary.maxX,dogPos.x));
+      dogPos.z=Math.max(boundary.minZ,Math.min(boundary.maxZ,dogPos.z));
+    }
+
+    // 持续生成新障碍物
+    spawnTimer+=dt;
+    if(spawnTimer>=SPAWN_INTERVAL){
+      spawnTimer=0;
+      const types=['lilypad','branch','seaweed'];
+      const type=types[Math.floor(Math.random()*3)];
+      const x=(Math.random()-0.5)*RIVER_WIDTH*0.7;
+      const z=DOG_START.z+Math.random()*(MASTER_POS.z-DOG_START.z);
+      if(type==='lilypad')createLilypad(x,z);
+      else if(type==='branch')createBranch(x,z);
+      else createSeaweed(x,z);
+    }
+
+    // 更新粒子
+    for(let i=particles.length-1;i>=0;i--){
+      const p=particles[i];
+      p.userData.life-=dt;
+      p.position.y+=p.userData.vy*dt;
+      p.material.opacity=p.userData.life/2;
+      if(p.userData.life<=0){
+        scene.remove(p);
+        particles.splice(i,1);
+      }
+    }
+  }else{
+    // 结束状态
+    stateTimer+=dt;
+    if(gameState==='win'){
+      if(stateTimer>2&&stateTimer<8){
+        endMsg.style.opacity='1';
+        endMsg.innerHTML='…我游到了。<br>他一直都在。';
+      }
+      if(stateTimer>8&&window.location.href.includes('swim_game')){
+        window.location.href='index.html';
+      }
+    }
+    if(gameState==='lose'){
+      if(stateTimer>1){
+        endMsg.style.opacity='1';
+        endMsg.innerHTML='…水太大了，<br>我找不到他。';
+        retryBtn.style.display='block';
+        retryBtn.style.opacity='1';
+      }
+    }
+  }
+
+  // 俯视相机跟随
+  const targetZ=dogPos.z+3;
+  camera.position.x+=(dogPos.x*0.3-camera.position.x)*0.05;
+  camera.position.z+=(targetZ-camera.position.z)*0.05;
+  camera.lookAt(dogPos.x*0.2,0,targetZ+1);
+
+  renderer.render(scene,camera);
+}
+
+// ─── 重置 ──────────────────────────────
+window.resetGame=function(){
+  gameState='playing'; stateTimer=0;
+  elapsedTime=0; startTime=performance.now();
+  dogPos=DOG_START.clone();
+  dogVel.set(0,0,0);
+  dogAngle=0;
+  slowTimer=0;
+  spawnTimer=0;
+  endMsg.style.opacity='0';
+  endMsg.innerHTML='';
+  retryBtn.style.display='none';
+  retryBtn.style.opacity='0';
+  hintEl.style.opacity='0.8';
+  if(dogGroup)dogGroup.position.copy(dogPos);
+  if(masterGroup&&masterGroup.userData.glow){
+    masterGroup.remove(masterGroup.userData.glow);
+    masterGroup.userData.glow=null;
+  }
+  if(masterGroup&&masterGroup.userData.lightPillar){
+    scene.remove(masterGroup.userData.lightPillar);
+    masterGroup.userData.lightPillar=null;
+  }
+  // 清除粒子
+  particles.forEach(p=>scene.remove(p));
+  particles.length=0;
+  // 重置障碍物
+  obstacles.forEach(o=>scene.remove(o));
+  obstacles.length=0;
+  spawnObstacles();
+  spawnTimer=0;
+  hasMovedForward=false;
+  console.log('🔄 游戏已重置');
+};
+
+// ─── 窗口大小 ──────────────────────────
+window.addEventListener('resize',()=>{
+  camera.aspect=window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth,window.innerHeight);
+});
+
+// ─── 启动 ──────────────────────────────
+animate();
+
+// 3秒后淡出提示
+setTimeout(()=>{hintEl.style.opacity='0'},3000);
+</script>
+</body>
+</html>

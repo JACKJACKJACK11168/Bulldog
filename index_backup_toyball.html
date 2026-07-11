@@ -384,7 +384,7 @@
 
         // 法斗区域碰撞盒（x:-0.2~+0.9, z:-2.7）
         const dogAreaCX = 0.35;     // (-0.2+0.9)/2
-        const dogAreaCZ = -3.0;     // 再向-z移0.2
+        const dogAreaCZ = -2.8;     // 向-z移0.1
         addCollider(dogAreaCX, dogAreaCZ, 0.55, 0.35, true, 0.4, 0.175);
 
         // 卫生间抬升区域：3m×3m×0.2m（仅可视化+抬升用，不阻挡移动）
@@ -534,37 +534,6 @@
         loadObjRoom('rooms/livingroom.obj', 'rooms/livingroom.mtl', 0.5, spacingX, -spacingZ, -Math.PI/2, '客厅');
         loadRoom('rooms/kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房', false);
         loadRoom('rooms/bathroom.glb',  0.5,  spacingX,  spacingZ - bathroomOffsetZ, Math.PI,       '卫生间');
-
-        // 识别卫生间游泳圈（Torus.005，蓝色#1F49CC+白色#CCCCCC双色条纹）
-        (function identifyBathroomItems() {
-            const checkBath = setInterval(() => {
-                const bathroom = scene.children.find(c =>
-                    c.isObject3D && !c.isLight &&
-                    c.position.x > 0 && c.position.z > 0 &&
-                    Math.abs(c.position.x - spacingX) < 2 &&
-                    Math.abs(c.position.z - (spacingZ - bathroomOffsetZ)) < 2
-                );
-                if (!bathroom) return;
-                clearInterval(checkBath);
-
-                let swimRingMesh = null;
-                bathroom.traverse((child) => {
-                    if (child.isMesh && child.name === 'Torus.005') {
-                        const mat = child.material;
-                        const hex = mat && mat.color ? '#' + mat.color.getHexString() : '?';
-                        console.log(`🏊 卫生间Torus.005: 颜色=${hex}, pos=(${child.position.x.toFixed(2)},${child.position.y.toFixed(2)},${child.position.z.toFixed(2)})`);
-                        // 蓝白条纹游泳圈：双基元 #CCCCCC + #1F49CC
-                        if (hex === '#cccccc' || hex === '#1f49cc') {
-                            swimRingMesh = child;
-                            // 计算世界位置
-                            const wp = new THREE.Vector3();
-                            child.getWorldPosition(wp);
-                            console.log(`✅ 游泳圈世界位置: (${wp.x.toFixed(2)}, ${wp.y.toFixed(2)}, ${wp.z.toFixed(2)})`);
-                        }
-                    }
-                });
-            }, 500);
-        })();
 
         // 过渡墙体：厨房与卫生间之间的浅棕色连接墙
         const wallStartX = -spacingX + 1.5;
@@ -894,149 +863,10 @@
         // 遥控器碰撞体（桌面上）
         addCollider(remotePosX, remotePosZ, 0.15, 0.10, true, 0.08, 0.49);
 
-        // 狗叫声已删除（等待导入音频文件）
-
-        // ==================== 遥控器叼取序列 ====================
-        const REMOTE_SEQUENCE = {
-            INITIAL_POS: new THREE.Vector3(1.35, 0.45, -1.68),
-            DROP_POS: new THREE.Vector3(1.8, 0.05, -0.5),
-            SPIN_SPEED: Math.PI * 1.2,  // 0.6秒一圈
-            SPIN_TOTAL: Math.PI * 4,     // 转两圈
-            WAIT_TIME: 2.0,
-            MOUTH_OFFSET: new THREE.Vector3(0.02, 0.58, 0.35),
-        };
-        let remoteSeqState = 'IDLE'; // IDLE→PICKUP→SPIN→DROP→RESET→IDLE
-        let remoteSeqSpinAngle = 0;
-        let remoteSeqTimer = 0;
-        let remoteSeqLocked = false; // 禁用玩家控制
-        const remoteOriginalPos = remoteGroup.position.clone();
-        const remoteOriginalRot = remoteGroup.rotation.clone();
-
-        // 计算法斗嘴部世界位置（基于法斗朝向 + 固定偏移）
-        function getBulldogMouthPos() {
-            const forward = new THREE.Vector3(0, 0, 0.30);
-            forward.applyQuaternion(bulldogGroup.quaternion);
-            const pos = bulldogGroup.position.clone().add(forward);
-            pos.y += 0.40;
-            return pos;
-        }
-
-        // 遥控器序列动画函数（在animate循环中调用）
-        function updateRemoteSequence(dt) {
-            if (remoteSeqState === 'IDLE') return;
-
-            if (remoteSeqState === 'PICKUP') {
-                // 遥控器瞬移到法斗嘴部（基于模型包围盒）
-                remoteGroup.position.copy(getBulldogMouthPos());
-                remoteGroup.rotation.set(0.3, bulldogGroup.rotation.y + 0.2, 0);
-                remoteSeqState = 'SPIN';
-                remoteSeqSpinAngle = 0;
-                showFeedback('🐶 汪！汪！...');
-            }
-
-            if (remoteSeqState === 'SPIN') {
-                const spinAmount = REMOTE_SEQUENCE.SPIN_SPEED * dt;
-                remoteSeqSpinAngle += spinAmount;
-                bulldogGroup.rotation.y += spinAmount;
-                // 遥控器跟随嘴部位置
-                remoteGroup.position.copy(getBulldogMouthPos());
-                remoteGroup.rotation.set(0.3, bulldogGroup.rotation.y + 0.2, 0);
-
-                // 转圈时每隔一定角度叫一声
-                const prevQuarter = Math.floor((remoteSeqSpinAngle - spinAmount) / (Math.PI / 2));
-                const curQuarter = Math.floor(remoteSeqSpinAngle / (Math.PI / 2));
-                if (curQuarter > prevQuarter && remoteSeqSpinAngle < REMOTE_SEQUENCE.SPIN_TOTAL - 0.3) {
-                    playBark();
-                }
-
-                if (remoteSeqSpinAngle >= REMOTE_SEQUENCE.SPIN_TOTAL) {
-                    // 转完两圈，直接重置回茶几
-                    remoteGroup.position.copy(REMOTE_SEQUENCE.INITIAL_POS);
-                    remoteGroup.rotation.copy(remoteOriginalRot);
-                    remoteSeqState = 'RESET';
-                    remoteSeqTimer = 0;
-                }
-            }
-
-            if (remoteSeqState === 'RESET') {
-                // 闪回触发
-                triggerRemoteFetchFlashback();
-                remoteSeqLocked = false;
-                remoteSeqState = 'IDLE';
-                // 恢复互动提示
-                hintEl.classList.remove('visible');
-            }
-        }
-
-        // 主人NPC头部倾斜（低头看手机）
-        let ownerHeadBone = null;
-        function setupOwnerPose() {
-            if (!ownerGroup.children[0]) return;
-            let found = false;
-            ownerGroup.children[0].traverse((child) => {
-                if (child.isBone && (child.name.toLowerCase().includes('head') ||
-                    child.name.toLowerCase().includes('头') ||
-                    child.name.includes('_6') || child.name.includes('neck'))) {
-                    ownerHeadBone = child;
-                    child.rotation.x = Math.PI / 9; // 低头约20度
-                    found = true;
-                    console.log('👤 主人头部已倾斜！骨:', child.name);
-                }
-            });
-            // 没找到骨骼时不操作整个模型
-            if (!found) {
-                console.log('👤 未找到头部骨骼，保持原始姿态');
-            }
-        }
-        // 主人加载完成后设置姿态
-        (function waitOwner() {
-            if (ownerGroup.children.length > 0) {
-                setupOwnerPose();
-            } else {
-                setTimeout(waitOwner, 200);
-            }
-        })();
-
-        // 遥控器叼取闪回
-        const flashbackFetchOverlay = (function() {
-            const ov = document.createElement('div');
-            ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity 1.2s ease-in-out;';
-            const blur = document.createElement('div');
-            blur.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);';
-            const sepia = document.createElement('div');
-            sepia.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.35);filter:blur(2px) sepia(0.7) saturate(0.8);';
-            const text = document.createElement('div');
-            text.id = 'flashback-fetch-text';
-            text.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;';
-            text.textContent = '以前，他会笑着接过遥控器，\n把我抱到沙发上一起看。';
-            ov.appendChild(blur); ov.appendChild(sepia); ov.appendChild(text);
-            document.body.appendChild(ov);
-            return { overlay: ov, text: text };
-        })();
-
-        function triggerRemoteFetchFlashback() {
-            flashbackFetchOverlay.overlay.style.opacity = '1';
-            flashbackFetchOverlay.text.style.opacity = '1';
-            // 遥控器发光恢复
-            remoteGroup.traverse((child) => {
-                if (child.isMesh && child.material && child.material.emissive !== undefined) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.4;
-                }
-            });
-            setTimeout(() => {
-                flashbackFetchOverlay.overlay.style.opacity = '0';
-                flashbackFetchOverlay.text.style.opacity = '0';
-            }, 3000);
-        }
-
         // 钢琴位置（世界坐标：X≈3.83, Z≈-1.96）
         const pianoWorldPos = new THREE.Vector3(3.83, 0, -1.96);
         // 钢琴碰撞体（朝±z方向延长）
         addCollider(3.83, -1.96, 0.35, 1.95, true, 0.5, 0.25);
-
-        // 游泳圈位置（卫生间内 Torus.005）
-        const swimRingWorldPos = new THREE.Vector3(2.19, 0.67, 0.2);
 
         // 项圈位置（卧室衣柜内，平放在地上）
         const collarWorldPos = new THREE.Vector3(-3.30, 0.82, -0.55);
@@ -1108,244 +938,6 @@
         scene.add(collarGroup);
         // 项圈碰撞体
         addCollider(collarWorldPos.x, collarWorldPos.z, 0.20, 0.15, true, 0.15, collarWorldPos.y);
-
-        // ==================== 狗绳模型 ====================
-        const leashWorldPos = new THREE.Vector3(-1.24, 0.06, 0.44);
-        const leashGroup = new THREE.Group();
-
-        const Y = 0.01;
-        const R = 0.018;
-        const matUpper = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.5, metalness: 0.05 });
-        const matLower = new THREE.MeshStandardMaterial({ color: 0x6B3410, roughness: 0.55, metalness: 0.03 });
-        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.12, depthWrite: false });
-
-        function makeTube(pList, mat, yOff) {
-            const curve = new THREE.CatmullRomCurve3(pList, false, 'catmullrom', 0.5);
-            const t = new THREE.Mesh(new THREE.TubeGeometry(curve, 60, R, 8, false), mat);
-            t.position.y = Y + yOff;
-            t.castShadow = true;
-            return t;
-        }
-
-        function makeShadow(x, z, len) {
-            const s = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.002, len), shadowMat);
-            s.position.set(x, Y + 0.003, z);
-            return s;
-        }
-
-        // ── 段1：外圈右下（下层，深色）──
-        leashGroup.add(makeTube([
-            new THREE.Vector3(-0.14, 0,  0.00),
-            new THREE.Vector3(-0.06, 0, -0.06),
-            new THREE.Vector3( 0.04, 0, -0.14),
-            new THREE.Vector3( 0.14, 0, -0.06),
-        ], matLower, 0.001));
-
-        // ── 段2：外圈从右向上（上层，跨段1）──
-        leashGroup.add(makeTube([
-            new THREE.Vector3( 0.14, 0, -0.06),
-            new THREE.Vector3( 0.12, 0,  0.04),
-            new THREE.Vector3( 0.04, 0,  0.12),
-            new THREE.Vector3(-0.08, 0,  0.14),
-        ], matUpper, 0.005));
-
-        // ── 段3：外圈从左上绕回（下层）──
-        leashGroup.add(makeTube([
-            new THREE.Vector3(-0.08, 0,  0.14),
-            new THREE.Vector3(-0.14, 0,  0.06),
-            new THREE.Vector3(-0.12, 0, -0.02),
-        ], matLower, 0.001));
-
-        // ── 段4：从左边斜穿到右边（上层，跨段1+3）──
-        leashGroup.add(makeTube([
-            new THREE.Vector3(-0.12, 0, -0.02),
-            new THREE.Vector3(-0.04, 0,  0.02),
-            new THREE.Vector3( 0.04, 0, -0.06),
-            new THREE.Vector3( 0.12, 0, -0.02),
-        ], matUpper, 0.007));
-
-        // ── 段5：从右上穿到左下（上层）──
-        leashGroup.add(makeTube([
-            new THREE.Vector3( 0.12, 0, -0.02),
-            new THREE.Vector3( 0.04, 0,  0.06),
-            new THREE.Vector3(-0.04, 0,  0.04),
-            new THREE.Vector3(-0.10, 0, -0.04),
-        ], matUpper, 0.005));
-
-        // ── 段6：尾巴收束（上层）──
-        leashGroup.add(makeTube([
-            new THREE.Vector3(-0.10, 0, -0.04),
-            new THREE.Vector3(-0.06, 0, -0.10),
-            new THREE.Vector3( 0.02, 0, -0.10),
-            new THREE.Vector3( 0.06, 0, -0.06),
-            new THREE.Vector3( 0.08, 0, -0.02),
-        ], matUpper, 0.006));
-
-        leashGroup.add(makeShadow(0.10,-0.08,0.24));
-        leashGroup.add(makeShadow(-0.06,0.10,0.22));
-        leashGroup.add(makeShadow(0.02,0.00,0.18));
-
-        // 金属扣（银白色，挂在绳上）
-        const clipMat = new THREE.MeshStandardMaterial({ color: 0xCCCCCC, roughness: 0.15, metalness: 1.0 });
-        const clip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.06), clipMat);
-        clip.position.set(-0.12, Y + 0.01, -0.02);
-        clip.castShadow = true;
-        leashGroup.add(clip);
-
-        leashGroup.position.copy(leashWorldPos);
-        scene.add(leashGroup);
-
-        // ==================== 病历 ====================
-        var medicalPos = new THREE.Vector3(2.66, 0.003, -2.74);
-        var medicalGroup = new THREE.Group();
-        var medCanvas = document.createElement('canvas');
-        medCanvas.width = 256; medCanvas.height = 358;
-        var mc = medCanvas.getContext('2d');
-        mc.fillStyle = '#F5F0E0'; mc.fillRect(0, 0, 256, 358);
-        mc.fillStyle = '#CC0000';
-        mc.fillRect(20, 15, 30, 10);
-        mc.fillRect(25, 10, 20, 20);
-        mc.fillStyle = '#333';
-        mc.font = 'bold 16px serif';
-        mc.fillText('就诊记录', 70, 30);
-        mc.strokeStyle = '#AAA';
-        mc.lineWidth = 1;
-        mc.beginPath(); mc.moveTo(15, 40); mc.lineTo(241, 40); mc.stroke();
-        mc.strokeStyle = '#555';
-        mc.lineWidth = 2;
-        var yPos = 55;
-        for (var li = 0; li < 8; li++) {
-            yPos += 28;
-            mc.beginPath();
-            mc.moveTo(20, yPos);
-            var lx = 20;
-            while (lx < 220) {
-                lx += 15 + 40 * Math.random();
-                mc.lineTo(lx, yPos + (Math.random() - 0.5) * 5);
-            }
-            mc.stroke();
-        }
-        mc.strokeStyle = '#1a5276';
-        mc.lineWidth = 3;
-        mc.beginPath();
-        mc.arc(200, 310, 25, 0, Math.PI * 2);
-        mc.stroke();
-        mc.fillStyle = '#1a5276';
-        mc.font = 'bold 10px sans-serif';
-        mc.fillText('XX医院', 178, 305);
-        mc.font = '8px sans-serif';
-        mc.fillText('2024.03', 180, 322);
-        var medTex = new THREE.CanvasTexture(medCanvas);
-
-        var paperWidth = 0.3; var paperHeight = 0.42;
-        var paperGeo = new THREE.PlaneGeometry(paperWidth, paperHeight);
-        var paperMat = new THREE.MeshStandardMaterial({ map: medTex, roughness: 0.7, side: THREE.DoubleSide });
-        var paper = new THREE.Mesh(paperGeo, paperMat);
-        paper.rotation.x = -Math.PI / 2 + 0.15;
-        paper.position.y = 0.015;
-        medicalGroup.add(paper);
-
-        var shadowGeo2 = new THREE.PlaneGeometry(paperWidth + 0.04, paperHeight + 0.04);
-        var shadowMat2 = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, depthWrite: false, side: THREE.DoubleSide });
-        var shadowPlane = new THREE.Mesh(shadowGeo2, shadowMat2);
-        shadowPlane.rotation.x = -Math.PI / 2;
-        shadowPlane.position.y = 0.001;
-        medicalGroup.add(shadowPlane);
-
-        medicalGroup.position.copy(medicalPos);
-        medicalGroup.position.y = 0.01;
-        medicalGroup.rotation.y = 0.35;
-        scene.add(medicalGroup);
-
-        var medGlow = new THREE.PointLight(0xFFD700, 0, 1.2);
-        medGlow.position.copy(medicalPos);
-        medGlow.position.y += 0.08;
-        scene.add(medGlow);
-
-        var medicalRecordInteracted = localStorage.getItem('medicalRecordInteracted') === 'true';
-        if (medicalRecordInteracted) {
-            medGlow.intensity = 0.8;
-            paper.material = paper.material.clone();
-            paper.material.emissive = new THREE.Color(0xFFD700);
-            paper.material.emissiveIntensity = 0.3;
-        }
-
-        function triggerMedicalFlashback() {
-            if (medicalRecordInteracted) return;
-            medicalRecordInteracted = true;
-            localStorage.setItem('medicalRecordInteracted', 'true');
-            paper.material = paper.material.clone();
-            paper.material.emissive = new THREE.Color(0xFFD700);
-            paper.material.emissiveIntensity = 0.3;
-            medGlow.intensity = 0.8;
-
-            var ov = document.createElement('div');
-            ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;';
-            var blurDiv = document.createElement('div');
-            blurDiv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px);';
-            var sepiaDiv = document.createElement('div');
-            sepiaDiv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.3);filter:sepia(0.6) saturate(0.7);';
-            var textEl = document.createElement('div');
-            textEl.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 2px 8px rgba(0,0,0,0.7);text-align:center;';
-            textEl.textContent = '……消毒水的味道。\n我不喜欢那个地方。';
-            ov.appendChild(blurDiv); ov.appendChild(sepiaDiv); ov.appendChild(textEl);
-            document.body.appendChild(ov);
-            setTimeout(function(){ ov.style.transition='opacity 0.8s'; ov.style.opacity='0'; setTimeout(function(){ document.body.removeChild(ov); },800); },3000);
-            console.log('病历闪回触发');
-        }
-
-        // 狗绳碰撞检测
-        addCollider(leashWorldPos.x, leashWorldPos.z, 0.20, 0.15, true, 0.12, leashWorldPos.y);
-
-        // 狗绳交互状态
-        let leashInteracted = localStorage.getItem('leashInteracted') === 'true';
-
-        // 恢复发光
-        if (leashInteracted) {
-            leashGroup.traverse((child) => {
-                if (child.isMesh && child.material.emissive) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.5;
-                }
-            });
-        }
-
-        // 狗绳闪回
-        function triggerLeashFlashback() {
-            if (leashInteracted) return;
-            leashInteracted = true;
-            localStorage.setItem('leashInteracted', 'true');
-
-            // 发光
-            leashGroup.traverse((child) => {
-                if (child.isMesh && child.material.emissive !== undefined) {
-                    child.material = child.material.clone();
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.5;
-                }
-            });
-
-            // 闪回叠加层
-            const ov = document.createElement('div');
-            ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;';
-            const blur = document.createElement('div');
-            blur.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px);';
-            const sepia = document.createElement('div');
-            sepia.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.3);filter:sepia(0.6) saturate(0.7);';
-            const text = document.createElement('div');
-            text.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;';
-            text.textContent = '……灰尘很厚，\n很久没被牵出去了。';
-            ov.appendChild(blur); ov.appendChild(sepia); ov.appendChild(text);
-            document.body.appendChild(ov);
-
-            setTimeout(() => {
-                ov.style.transition = 'opacity 0.8s';
-                ov.style.opacity = '0';
-                setTimeout(() => document.body.removeChild(ov), 800);
-            }, 3000);
-
-            console.log('🦮 狗绳闪回触发');
-        }
 
         function showFeedback(text) {
             feedbackEl.textContent = text;
@@ -1469,20 +1061,6 @@
             }, 3000);
 
             console.log('📺 闪回效果触发：以前主人抱着我一起看电视…');
-        }
-
-        // 遥控器叼取序列触发
-        function startRemoteSequence() {
-            if (remoteSeqLocked || remoteSeqState !== 'IDLE') return;
-            remoteInteracted = true;
-            localStorage.setItem('remoteInteracted', 'true');
-            remoteSeqLocked = true;
-            remoteSeqState = 'PICKUP';
-            hintEl.classList.remove('visible');
-            // 清空移动键防止法斗惯性移动
-            keyState.w = false; keyState.a = false; keyState.s = false; keyState.d = false;
-            showFeedback('🐶 叼起遥控器...');
-            console.log('🐶 遥控器叼取序列开始！');
         }
 
         // ==================== 项圈双视角短片 ====================
@@ -2205,60 +1783,9 @@
             const playerPos = bulldogGroup.position;
             let closestDist = Infinity, closestItem = null;
 
-            // 检查病历
-            if (!medicalRecordInteracted) {
-                var medDist = playerPos.distanceTo(medicalPos);
-                if (medDist < 2.0 && medDist < closestDist) {
-                    closestDist = medDist;
-                    closestItem = {
-                        id: 'medical',
-                        name: '病历',
-                        action: function() { triggerMedicalFlashback(); }
-                    };
-                }
-            }
-
-            // 检查狗绳
-            if (!leashInteracted) {
-                const leashDist = playerPos.distanceTo(leashWorldPos);
-                if (leashDist < 0.8 && leashDist < closestDist) {
-                    closestDist = leashDist;
-                    closestItem = {
-                        id: 'leash',
-                        name: '狗绳',
-                        action: () => {
-                            leashInteracted = true;
-                            localStorage.setItem('leashInteracted', 'true');
-                            leashGroup.traverse((child) => {
-                                if (child.isMesh && child.material.emissive !== undefined) {
-                                    child.material = child.material.clone();
-                                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                                    child.material.emissiveIntensity = 0.5;
-                                }
-                            });
-                            var w = window.open('knot_game.html','_blank','width=820,height=640');
-                            if (!w) window.location.href = 'knot_game.html';
-                        }
-                    };
-                }
-            }
-
-            // 检查游泳圈（卫生间）
-            const swimRingDist = playerPos.distanceTo(swimRingWorldPos);
-            if (swimRingDist < 1.0 && swimRingDist < closestDist) {
-                closestDist = swimRingDist;
-                closestItem = {
-                    id: 'swimring',
-                    name: '游泳圈',
-                    action: () => { window.location.href = 'swim_game.html'; }
-                };
-            }
-
-            // 检查项圈（最高优先级，Y轴范围加大：仅XZ平面距离）
+            // 检查项圈（最高优先级）
             if (!collarInteracted) {
-                const dx = playerPos.x - collarWorldPos.x;
-                const dz = playerPos.z - collarWorldPos.z;
-                const collarDist = Math.sqrt(dx * dx + dz * dz);
+                const collarDist = playerPos.distanceTo(collarWorldPos);
                 if (collarDist < 0.8) {
                     closestDist = collarDist;
                     closestItem = {
@@ -2282,15 +1809,15 @@
                 }
             }
 
-            // 检查遥控器（叼取序列，不可重复）
-            if (!remoteInteracted && !remoteSeqLocked) {
+            // 检查遥控器
+            if (!remoteInteracted) {
                 const remoteDist = playerPos.distanceTo(remoteWorldPos);
                 if (remoteDist < 0.8 && remoteDist < closestDist) {
                     closestDist = remoteDist;
                     closestItem = {
                         id: 'remote',
                         name: '遥控器',
-                        action: () => startRemoteSequence()
+                        action: () => triggerRemoteFlashback()
                     };
                 }
             }
@@ -2444,8 +1971,6 @@
         });
 
         document.addEventListener('keydown', (e) => {
-            // 遥控器叼取序列中屏蔽所有按键
-            if (remoteSeqLocked) return;
             // 项圈选择面板或视频播放中屏蔽所有游戏按键
             if (collarChoiceOverlay.style.display === 'flex' || collarVideoOverlay.style.display === 'block') {
                 return;
@@ -2638,12 +2163,7 @@
 
             const dt = Math.min(clock.getDelta(), 0.1);
 
-            if (remoteSeqLocked) {
-                // 序列控制期间跳过手动移动
-                updateRemoteSequence(dt);
-            } else {
-                updateMovement(dt);
-            }
+            updateMovement(dt);
             updateCamera();
             updateInteractionHints();
 
