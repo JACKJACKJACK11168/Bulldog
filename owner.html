@@ -182,7 +182,7 @@
             <div id="piano-score" style="color:#FFD700;font-size:28px;font-weight:bold;font-family:'Microsoft YaHei',sans-serif;text-shadow:0 0 10px rgba(255,215,0,0.5);"></div>
             <div id="piano-mistakes" style="color:#FF6B6B;font-size:18px;font-family:'Microsoft YaHei',sans-serif;margin-top:4px;"></div>
         </div>
-        <div id="piano-hint" style="position:absolute;top:15%;left:50%;transform:translate(-50%,0);color:rgba(255,255,255,0.7);font-size:18px;font-family:'Microsoft YaHei',sans-serif;pointer-events:none;text-align:center;transition:opacity 0.5s;">🎹 光点落到金线上时，点击对应琴键！<br><span style="font-size:14px;color:rgba(255,255,255,0.4);">允许2次错误</span></div>
+        <div id="piano-hint" style="position:absolute;top:15%;left:50%;transform:translate(-50%,0);color:rgba(255,255,255,0.7);font-size:18px;font-family:'Microsoft YaHei',sans-serif;pointer-events:none;text-align:center;transition:opacity 0.5s;">🎹 光点落入金色判定区时，点击对应琴键！<br><span style="font-size:14px;color:rgba(255,255,255,0.4);">允许2次错误</span></div>
         <div id="piano-result" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;display:none;pointer-events:none;">
             <div id="piano-result-text" style="font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.5vw,24px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5);line-height:1.8;max-width:80vw;"></div>
             <div id="piano-result-hint" style="color:rgba(255,255,255,0.6);font-size:14px;margin-top:20px;font-family:'Microsoft YaHei',sans-serif;">点击任意位置返回</div>
@@ -1412,7 +1412,7 @@
                 setTimeout(function(){ov.style.transition='opacity 0.8s';ov.style.opacity='0';setTimeout(function(){document.body.removeChild(ov);},800);},3000);
             },
             greenbook:() => triggerGreenBook(),
-            leash:    () => { ownerHideItem('leash');ownerSavePlayerPos();leashInteracted=true;localStorage.setItem('leashInteracted','true');localStorage.setItem('knotGameReturn','owner.html');var w=window.open('knot_game.html','_blank','width=820,height=640');if(!w)window.location.href='knot_game.html'; },
+            leash:    () => { ownerHideItem('leash');ownerSavePlayerPos();leashInteracted=true;localStorage.setItem('leashInteracted','true');localStorage.setItem('knotGameReturn','owner.html');window.location.href='knot_game.html'; },
             medical:  () => {
                 ownerHideItem('medical');
                 var imgOverlay=document.createElement('div');
@@ -2009,6 +2009,8 @@
         const FALL_SPEED = 130; // px/s
         const TRACK_Y_START = -60;
         const TRIGGER_LINE_RATIO = 0.55;
+        // 浏览器将 1in 定义为 96 CSS 像素，因此 0.5cm 对应约 18.9px。
+        const HIT_ZONE_HEIGHT = 0.5 * 96 / 2.54;
 
         // 动画相关
         let pianoLastTime = 0;
@@ -2185,7 +2187,7 @@
             const clickedKey = Math.floor(relX / keyWidth);
             const triggerY = h * TRIGGER_LINE_RATIO;
 
-            // 找最近的未命中音符（触发线±30px内判定）
+            // 找判定区内最近的未命中音符
             let bestNote = null;
             let bestDist = Infinity;
             for (const note of fallingNotes) {
@@ -2193,8 +2195,7 @@
                 if (note.keyIndex !== clickedKey) continue;
                 const dist = note.y - triggerY;
                 const absDist = Math.abs(dist);
-                // 允许在触发线上方20px到下方30px范围内
-                if (dist <= 30 && dist >= -20 && absDist < bestDist) {
+                if (absDist <= HIT_ZONE_HEIGHT / 2 && absDist < bestDist) {
                     bestDist = absDist;
                     bestNote = note;
                 }
@@ -2378,16 +2379,15 @@
                 ctx.fill();
             }
 
-            // 触发线
+            // 0.5cm 高的判定区域（显示范围与命中范围保持一致）
             const triggerY = h * TRIGGER_LINE_RATIO;
-            ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([10, 10]);
-            ctx.beginPath();
-            ctx.moveTo(0, triggerY);
-            ctx.lineTo(w, triggerY);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            const hitZoneTop = triggerY - HIT_ZONE_HEIGHT / 2;
+            const hitZoneGrad = ctx.createLinearGradient(0, hitZoneTop, 0, hitZoneTop + HIT_ZONE_HEIGHT);
+            hitZoneGrad.addColorStop(0, 'rgba(255, 215, 0, 0.12)');
+            hitZoneGrad.addColorStop(0.5, 'rgba(255, 215, 0, 0.42)');
+            hitZoneGrad.addColorStop(1, 'rgba(255, 215, 0, 0.12)');
+            ctx.fillStyle = hitZoneGrad;
+            ctx.fillRect(0, hitZoneTop, w, HIT_ZONE_HEIGHT);
 
             // 轨道区域
             const keyAreaTop = h * 0.40;
