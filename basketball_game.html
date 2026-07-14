@@ -792,7 +792,7 @@
                     // 跳回房间
                     showSpeech('回家咯！', 2000);
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.href = 'index.html';
                     }, 2000);
                 }
             }
@@ -972,6 +972,8 @@
         console.log('法斗篮球游戏已就绪！');
         console.log('规则：WASD控制法斗跑过去接球，接住后跑到主人身边传回去');
         console.log('连续完成5次传球即可获胜！');
+        window.skipBasketball = function() { gameState.score = 5; winGame(); };
     </script>
+<button onclick="window.skipBasketball()" style="position:fixed;bottom:10px;right:10px;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.2);padding:4px 12px;border-radius:15px;font-size:11px;cursor:pointer;z-index:100;font-family:inherit">跳过 ⏭</button>
 </body>
 </html>

@@ -32,6 +32,7 @@ canvas{display:block}
   <div id="end-msg"></div>
   <button id="retry-btn" onclick="resetGame()">🔄 再试一次</button>
 </div>
+<button onclick="window.skipSwimGame()" style="position:fixed;bottom:10px;right:10px;background:rgba(255,255,255,0.2);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.3);padding:6px 14px;border-radius:15px;font-size:12px;cursor:pointer;z-index:9999;font-family:inherit;pointer-events:auto">跳过 ⏭</button>
 
 <script type="importmap">
 {"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}
@@ -381,24 +382,46 @@ let stageMsgTimeout=null;
 const loader=new GLTFLoader();
 const assets={dog:null,master:null};
 
-// 加载主人模型
+// 加载主人模型（和法斗相同处理）
 loader.load('models/swimzhu.glb',(gltf)=>{
   assets.master=gltf.scene;
-  assets.master.scale.setScalar(1.5);
-  assets.master.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true}});
-  // 计算包围盒并居中
-  const box=new THREE.Box3().setFromObject(assets.master);
-  const cx=(box.min.x+box.max.x)/2;
-  const cy=box.min.y;
-  const cz=(box.min.z+box.max.z)/2;
-  assets.master.position.set(-cx,-cy,-cz);
-  assets.master.rotation.y=-Math.PI/2;
+  console.log('主人模型加载成功');
+  assets.master.traverse(c=>{
+    if(c.isMesh){
+      c.castShadow=true;c.receiveShadow=true;
+      if(c.material&&c.material.color){
+        c.material=new THREE.MeshBasicMaterial({color:c.material.color});
+      }
+    }
+  });
+  assets.master.scale.set(3.0,3.0,3.0);
+  assets.master.position.y=-0.5;
 
   masterGroup=new THREE.Group();
   masterGroup.position.copy(MASTER_POS);
   masterGroup.add(assets.master);
+
+  // 终点光圈
+  const ringGeo2=new THREE.TorusGeometry(1.2,0.08,16,48);
+  const ringMat2=new THREE.MeshStandardMaterial({color:'#FFD700',emissive:'#FFD700',emissiveIntensity:0.6,roughness:0.2});
+  const endRing=new THREE.Mesh(ringGeo2,ringMat2);
+  endRing.rotation.x=-Math.PI/2;
+  endRing.position.y=0.05;
+  endRing.name='endRing';
+  masterGroup.add(endRing);
+
+  // 光点粒子
+  for(let pi=0;pi<20;pi++){
+    const dotGeo=new THREE.SphereGeometry(0.05,6,6);
+    const dotMat=new THREE.MeshBasicMaterial({color:'#FFE4B5'});
+    const dot=new THREE.Mesh(dotGeo,dotMat);
+    dot.position.set(Math.cos(pi/20*Math.PI*2)*1.3,0.3+Math.sin(pi*1.7)*0.4,Math.sin(pi/20*Math.PI*2)*1.3);
+    dot.name='endDot';
+    masterGroup.add(dot);
+  }
+
   scene.add(masterGroup);
-  console.log('👤 主人模型加载成功！位置:('+MASTER_POS.x.toFixed(1)+','+MASTER_POS.y.toFixed(1)+','+MASTER_POS.z.toFixed(1)+')');
+  console.log('主人模型+终点光圈加载成功');
 });
 
 // 加载法斗
@@ -765,7 +788,7 @@ function animate(){
         endMsg.style.opacity='1';
         endMsg.innerHTML='…我游到了。<br>他一直都在。';
       }
-      if(stateTimer>8&&window.location.href.includes('swim_game')){
+      if(stateTimer>4&&window.location.href.includes('swim_game')){
         window.location.href='index.html';
       }
     }
@@ -789,6 +812,7 @@ function animate(){
 }
 
 // ─── 重置 ──────────────────────────────
+window.skipSwimGame=function(){gameState='win';stateTimer=0;};
 window.resetGame=function(){
   gameState='playing'; stateTimer=0;
   elapsedTime=0; startTime=performance.now();

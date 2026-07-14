@@ -1,0 +1,2676 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>小八的家 - 第三人称</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            pointer-events: none;
+            font-size: 14px;
+            user-select: none;
+            border-left: 4px solid #f1c40f;
+        }
+        #interact-hint {
+            position: absolute;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 18px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        #interact-hint.visible { opacity: 1; }
+        #action-feedback {
+            position: absolute;
+            bottom: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            font-size: 22px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(0,0,0,0.8);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 24px;
+            border-radius: 40px;
+        }
+        #action-feedback.show { opacity: 1; }
+        #controls-hint {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            background: rgba(0,0,0,0.4);
+            padding: 6px 18px;
+            border-radius: 20px;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        /* ====== 闪回效果叠加层 ====== */
+        #flashback-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0;
+            transition: opacity 1.2s ease-in-out;
+        }
+        /* sepia 暖色怀旧滤镜 */
+        #flashback-overlay.active {
+            opacity: 1;
+        }
+        #flashback-overlay .sepia-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(112, 66, 20, 0.35);
+            filter: blur(2px) sepia(0.7) saturate(0.8);
+        }
+        /* 模糊层 */
+        #flashback-overlay .blur-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+        }
+        /* 闪回文字 */
+        #flashback-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: 'Comic Sans MS', 'YouYuan', cursive, sans-serif;
+            font-size: clamp(20px, 3.5vw, 36px);
+            color: #FFE4B5;
+            text-shadow:
+                0 0 10px rgba(255, 228, 181, 0.8),
+                0 0 30px rgba(255, 180, 80, 0.5),
+                0 2px 8px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            line-height: 1.6;
+            max-width: 80vw;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            white-space: pre-line;
+            letter-spacing: 0.05em;
+        }
+        #flashback-overlay.active #flashback-text {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">🐶 小八的家 | 卧室 · 客厅 · 厨房 · 卫生间</div>
+    <div id="interact-hint">按 <kbd>E</kbd> 互动</div>
+    <div id="action-feedback"></div>
+    <div id="controls-hint">WASD 移动 · 空格 跳跃 · 鼠标拖动视角 · 滚轮缩放</div>
+    <div id="pos-display" style="position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#0f0;padding:8px 14px;border-radius:6px;font-size:13px;font-family:monospace;pointer-events:none;z-index:100;"></div>
+    <button id="reset-btn" style="position:absolute;bottom:30px;left:30px;background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;z-index:100;">🔄 重新开始</button>
+
+    <!-- 闪回效果叠加层 -->
+    <div id="flashback-overlay">
+        <div class="blur-layer"></div>
+        <div class="sepia-layer"></div>
+        <div id="flashback-text">总是满的...<br>但最近没什么味道了。</div>
+    </div>
+    <!-- 玩具球闪回叠加层 -->
+    <div id="flashback-ball-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity 1.2s ease-in-out;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);"></div>
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.35);filter:blur(2px) sepia(0.7) saturate(0.8);"></div>
+        <div id="flashback-ball-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(18px,3vw,30px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;">这个球是主人最常扔的…<br>我已经很久没有追过它了。</div>
+    </div>
+    <!-- 遥控器闪回叠加层 -->
+    <div id="flashback-remote-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity 1.2s ease-in-out;">
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);"></div>
+        <div style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.35);filter:blur(2px) sepia(0.7) saturate(0.8);"></div>
+        <div id="flashback-remote-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;">以前主人抱着我一起看电视…<br>现在他的眼睛不再看屏幕了。</div>
+    </div>
+
+    <!-- 钢琴节奏小游戏叠加层 -->
+    <div id="piano-game-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;display:none;background:rgba(0,0,0,0.85);">
+        <canvas id="piano-canvas"></canvas>
+        <div id="piano-game-ui" style="position:absolute;top:20px;left:50%;transform:translateX(-50%);text-align:center;pointer-events:none;">
+            <div id="piano-score" style="color:#FFD700;font-size:28px;font-weight:bold;font-family:'Microsoft YaHei',sans-serif;text-shadow:0 0 10px rgba(255,215,0,0.5);"></div>
+            <div id="piano-mistakes" style="color:#FF6B6B;font-size:18px;font-family:'Microsoft YaHei',sans-serif;margin-top:4px;"></div>
+        </div>
+        <div id="piano-hint" style="position:absolute;top:15%;left:50%;transform:translate(-50%,0);color:rgba(255,255,255,0.7);font-size:18px;font-family:'Microsoft YaHei',sans-serif;pointer-events:none;text-align:center;transition:opacity 0.5s;">🎹 光点落到金线上时，点击对应琴键！<br><span style="font-size:14px;color:rgba(255,255,255,0.4);">允许2次错误</span></div>
+        <div id="piano-result" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;display:none;pointer-events:none;">
+            <div id="piano-result-text" style="font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.5vw,24px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5);line-height:1.8;max-width:80vw;"></div>
+            <div id="piano-result-hint" style="color:rgba(255,255,255,0.6);font-size:14px;margin-top:20px;font-family:'Microsoft YaHei',sans-serif;">点击任意位置返回</div>
+        </div>
+    </div>
+
+    <!-- 项圈视角选择叠加层 -->
+    <div id="collar-choice-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:10001;display:none;background:rgba(0,0,0,0.8);justify-content:center;align-items:center;flex-direction:column;">
+        <div style="color:#FFE4B5;font-size:clamp(18px,2.5vw,28px);font-family:'Microsoft YaHei',sans-serif;margin-bottom:40px;text-shadow:0 0 15px rgba(255,228,181,0.5);">选择一段记忆</div>
+        <div style="display:flex;gap:30px;flex-wrap:wrap;justify-content:center;">
+            <button id="collar-btn-a" style="background:linear-gradient(135deg,#8B4513,#A0522D);color:#FFE4B5;border:2px solid #D2691E;padding:20px 40px;border-radius:16px;font-size:20px;font-family:'Microsoft YaHei',sans-serif;cursor:pointer;transition:all 0.3s;text-shadow:0 0 10px rgba(255,228,181,0.3);">🐶 小八的记忆<br><span style="font-size:14px;color:rgba(255,228,181,0.6);">第一次戴项圈</span></button>
+            <button id="collar-btn-b" style="background:linear-gradient(135deg,#2F4F4F,#3B6B6B);color:#E0FFFF;border:2px solid #5F9EA0;padding:20px 40px;border-radius:16px;font-size:20px;font-family:'Microsoft YaHei',sans-serif;cursor:pointer;transition:all 0.3s;text-shadow:0 0 10px rgba(224,255,255,0.3);">👤 主人的记忆<br><span style="font-size:14px;color:rgba(224,255,255,0.6);">为你戴上项圈</span></button>
+        </div>
+        <div style="color:rgba(255,255,255,0.4);font-size:14px;margin-top:30px;font-family:'Microsoft YaHei',sans-serif;">按 ESC 关闭</div>
+    </div>
+
+    <!-- 项圈视频播放器叠加层 -->
+    <div id="collar-video-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:10002;display:none;background:#000;">
+        <div id="collar-video-placeholder" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#fff;font-family:'Microsoft YaHei',sans-serif;">
+            <div id="collar-video-title" style="font-size:24px;margin-bottom:20px;color:#FFE4B5;"></div>
+            <div id="collar-video-hint" style="font-size:16px;color:rgba(255,255,255,0.5);margin-bottom:30px;">
+                视频占位区域<br><span style="font-size:13px;">替换 collar_video_a.mp4 或 collar_video_b.mp4 即可播放</span>
+            </div>
+            <video id="collar-video-element" style="max-width:90vw;max-height:70vh;display:none;" controls></video>
+        </div>
+        <div id="collar-video-controls" style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);display:flex;gap:20px;">
+            <button id="collar-video-play" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:10px 24px;border-radius:25px;font-size:16px;cursor:pointer;font-family:'Microsoft YaHei',sans-serif;">▶ 播放</button>
+            <button id="collar-video-close" style="background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:10px 24px;border-radius:25px;font-size:16px;cursor:pointer;font-family:'Microsoft YaHei',sans-serif;">✕ 关闭</button>
+        </div>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+        import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+        import { MTLLoader } from 'three/addons/loaders/MTLLoader.js';
+
+        // ==================== 脚步声合成 ====================
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let lastFootstepTime = 0;
+        const footstepInterval = 0.35;
+
+        function playFootstep(volume = 1.5, freq = 400) {
+            const now = audioCtx.currentTime;
+            if (now - lastFootstepTime < footstepInterval) return;
+            lastFootstepTime = now;
+
+            const duration = 0.08;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+            }
+
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = freq + Math.random() * 200;
+            filter.Q.value = 1;
+
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(volume, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(now);
+            source.stop(now + duration);
+        }
+
+        function playLandSound() {
+            const now = audioCtx.currentTime;
+            const duration = 0.15;
+            const bufferSize = audioCtx.sampleRate * duration;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.05));
+            }
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 150;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(4.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start(now);
+            source.stop(now + duration);
+        }
+
+        // ==================== 场景初始化 ====================
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xD4C5A9);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(2, 2, 5);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // ==================== 灯光 ====================
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xffeedd, 0x8d7c6b, 0.6);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfff8e7, 0.6);
+        dirLight.position.set(3, 6, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        const d = 12;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        dirLight.shadow.camera.near = 1;
+        dirLight.shadow.camera.far = 25;
+        scene.add(dirLight);
+
+        // ==================== 9m × 9m 房子盒子 ====================
+        const houseHalf = 4.5;
+        const wallH = 2.8;
+        const wallThick = 0.15;
+        const wallColor = 0xD4C5A9;
+
+        // ==================== 碰撞体积系统 ====================
+        // colliders 存放所有 AABB 碰撞盒，格式：{ minX, maxX, minZ, maxZ }
+        const colliders = [];
+        const playerRadius = 0.25; // 法斗碰撞半径（米）
+
+        function addCollider(cx, cz, halfW, halfD, showBox = false, boxH = 1.0, boxY = 0.5, isPlatform = false) {
+            colliders.push({
+                minX: cx - halfW,
+                maxX: cx + halfW,
+                minZ: cz - halfD,
+                maxZ: cz + halfD,
+                platformTop: isPlatform ? boxY + boxH / 2 : -Infinity  // 平台顶部高度
+            });
+            // 碰撞盒可视化已禁用
+            // if (showBox) { ... }
+        }
+
+        function addWall(x, z, w, d) {
+            const geo = new THREE.BoxGeometry(w, wallH, d);
+            const mat = new THREE.MeshStandardMaterial({ color: wallColor, roughness: 0.7 });
+            const wall = new THREE.Mesh(geo, mat);
+            wall.position.set(x, wallH / 2, z);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            scene.add(wall);
+            // 同步注册碰撞体积
+            addCollider(x, z, w / 2, d / 2);
+            return wall;
+        }
+
+        // 四面墙壁
+        addWall(0, -houseHalf, 9, wallThick);          // 前
+        addWall(0, houseHalf - 1.0, 9, wallThick);     // 后（内移1单位，靠近厨房卫生间）
+        addWall(-houseHalf, 0, wallThick, 9);          // 左
+        addWall(houseHalf, 0, wallThick, 9);           // 右
+
+        // ==================== 地板 ====================
+        // 地板覆盖到后墙位置（Z: -4.5 ~ 3.5）
+        const floorGeo = new THREE.PlaneGeometry(9, 8);
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0xD4A76A, roughness: 0.45, metalness: 0.03 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.position.set(0, 0.01, -0.5);
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // 木地板纹理线
+        for (let i = -4.5; i <= 4.5; i += 0.5) {
+            const lineGeo = new THREE.BoxGeometry(0.025, 0.005, 9);
+            const lineMat = new THREE.MeshStandardMaterial({ color: 0xB8895A, roughness: 0.6 });
+            const line = new THREE.Mesh(lineGeo, lineMat);
+            line.position.set(i, 0.015, 0);
+            line.receiveShadow = true;
+            scene.add(line);
+        }
+        for (let i = -4.5; i <= 4.5; i += 0.5) {
+            const lineGeo2 = new THREE.BoxGeometry(9, 0.005, 0.025);
+            const lineMat = new THREE.MeshStandardMaterial({ color: 0xB8895A, roughness: 0.6 });
+            const line2 = new THREE.Mesh(lineGeo2, lineMat);
+            line2.position.set(0, 0.015, i);
+            line2.receiveShadow = true;
+            scene.add(line2);
+        }
+
+        // 卧室床碰撞体（卧室在 X=-1.65, Z=-2.0，床靠左侧墙）
+        addCollider(-1.65 - 0.1, -2.0 - 1.15, 0.9, 1.0, true, 0.6, 0.3);
+
+        // 客厅碰撞体（客厅在 X=2.5, Z=-2.0）
+        addCollider(2.5 - 0.8 + 0.4 - 0.2, -2.0 + 0.675, 0.5, 0.75, true, 1.0, 0.5);
+
+        // 客厅电视墙碰撞盒（遥控器(1.35,-1.68)正前方约1.5米的墙面）
+        const tvWallX = 1.35;       // 与遥控器同X
+        const tvWallZ = -3.05;      // 朝-z移0.3
+        const tvWallW = 4.6;         // 墙面宽度（继续加长）
+        const tvWallD = 0.12;        // 墙面厚度
+        addCollider(tvWallX, tvWallZ, tvWallW / 2, tvWallD / 2, true, 1.5, 0.75);
+
+        // 法斗区域碰撞盒（x:-0.2~+0.9, z:-2.7）
+        const dogAreaCX = 0.35;     // (-0.2+0.9)/2
+        const dogAreaCZ = -3.0;     // 再向-z移0.2
+        addCollider(dogAreaCX, dogAreaCZ, 0.55, 0.35, true, 0.4, 0.175);
+
+        // 卫生间抬升区域：碰撞盒已隐藏
+
+        // 卫生间+Z侧后半区碰撞体积（Z从中点到最大值之间的一半）
+        addCollider(2.5, 2.775, 1.5, 0.375, true, 1.6, 1.0);
+
+        // 以上述碰撞体X和Z最大值点(4.0, 3.15)为轴心顺时针旋转90°得到的新碰撞体
+        // 原中心(2.5,2.775) → 新中心(4.375, 1.65)，尺寸互换: 0.375×1.5
+        addCollider(3.375, 1.65, 0.375, 1.5, true, 1.6, 1.0);
+
+        // ==================== 天花板 ====================
+        const ceilGeo = new THREE.PlaneGeometry(9, 9);
+        const ceilMat = new THREE.MeshStandardMaterial({ color: 0xF5F0E8, roughness: 0.7, side: THREE.DoubleSide });
+        const ceiling = new THREE.Mesh(ceilGeo, ceilMat);
+        ceiling.rotation.x = -Math.PI / 2;
+        ceiling.position.set(0, wallH, 0);
+        ceiling.receiveShadow = true;
+        scene.add(ceiling);
+
+        // ==================== 点光源 ====================
+        const lightPositions = [
+            { x: -2.2, z: -2.2 }, { x: 2.2, z: -2.2 },
+            { x: -2.2, z: 2.2 },  { x: 2.2, z: 2.2 }
+        ];
+        lightPositions.forEach(lp => {
+            const pl = new THREE.PointLight(0xfff5e6, 0.6, 7);
+            pl.position.set(lp.x, 2.2, lp.z);
+            scene.add(pl);
+        });
+
+        const centerLight = new THREE.PointLight(0xfffae6, 1.0, 12);
+        centerLight.position.set(0, 2.5, 0);
+        scene.add(centerLight);
+
+        // ==================== 房间模型加载 ====================
+        const gltfLoader = new GLTFLoader();
+
+        // 玩具球引用（客厅加载后填充）
+        let toyBallMesh = null;
+
+        function loadObjRoom(objFile, mtlFile, scale, posX, posZ, rotY, label) {
+            const mtlLoader = new MTLLoader();
+            mtlLoader.load(mtlFile, (materials) => {
+                materials.preload();
+                const objLoader = new OBJLoader();
+                objLoader.setMaterials(materials);
+                objLoader.load(objFile, (room) => {
+                    room.scale.set(scale, scale, scale);
+                    room.position.set(posX, 0, posZ);
+                    room.rotation.y = rotY;
+                    room.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                            // 查找玩具球：名称为"球体.019"的mesh
+                            if (label === '客厅' && child.name === '球体.019') {
+                                toyBallMesh = child;
+                                // 如果之前互动过，恢复发光
+                                if (localStorage.getItem('toyBallInteracted') === 'true') {
+                                    toyBallMesh.material = toyBallMesh.material.clone();
+                                    toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
+                                    toyBallMesh.material.emissiveIntensity = 0.5;
+                                }
+                                console.log('🏀 玩具球已找到！', child.name);
+                            }
+                            // 恢复钢琴发光状态
+                            if (label === '客厅' && child.material && child.material.name) {
+                                const mn = child.material.name;
+                                if ((mn === 'gangqing' || mn === 'gangqing2' || mn.startsWith('gangqing')) && localStorage.getItem('pianoInteracted') === 'true') {
+                                    child.material = child.material.clone();
+                                    child.material.emissive = new THREE.Color(0xFFD700);
+                                    child.material.emissiveIntensity = 0.8;
+                                    console.log('🎹 钢琴发光已恢复！', mn);
+                                }
+                            }
+                        }
+                    });
+                    scene.add(room);
+                    console.log(`✅ ${label} (OBJ) 加载成功！`);
+                }, undefined, (error) => {
+                    console.error(`❌ ${label} OBJ加载失败:`, error);
+                });
+            }, undefined, (error) => {
+                console.error(`❌ ${label} MTL加载失败:`, error);
+            });
+        }
+
+        function loadRoom(filename, scale, posX, posZ, rotY, label, addColl = false) {
+            gltfLoader.load(filename, (gltf) => {
+                const room = gltf.scene;
+                room.scale.set(scale, scale, scale);
+                room.position.set(posX, 0, posZ);
+                room.rotation.y = rotY;
+                room.traverse((child) => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+                scene.add(room);
+
+                // 如果需要自动添加碰撞体（用于厨房桌子等）
+                if (addColl) {
+                    // 只计算Y>0.25m的对象（桌面和桌腿，排除地板/地毯）
+                    const tableBox = new THREE.Box3();
+                    room.traverse((child) => {
+                        if (child.isMesh) {
+                            const childBox = new THREE.Box3().setFromObject(child);
+                            // 只取世界Y坐标>0.25m的部分（桌面高度）
+                            if (childBox.max.y > 0.25) {
+                                tableBox.union(childBox);
+                            }
+                        }
+                    });
+                    const cx = (tableBox.min.x + tableBox.max.x) / 2;
+                    const cz = (tableBox.min.z + tableBox.max.z) / 2;
+                    const hw = (tableBox.max.x - tableBox.min.x) / 2;
+                    const hd = (tableBox.max.z - tableBox.min.z) / 2;
+                    const th = tableBox.max.y - tableBox.min.y;
+                    const ty = (tableBox.min.y + tableBox.max.y) / 2;
+                    console.log(`📦 ${label} 碰撞体: center=(${cx.toFixed(2)}, ${cz.toFixed(2)}), size=${(hw*2).toFixed(2)}×${(hd*2).toFixed(2)}, 高=${th.toFixed(2)}`);
+                    addCollider(cx, cz, hw, hd, true, th, ty);
+                }
+
+                console.log(`✅ ${label} 加载成功！`);
+            }, undefined, (error) => {
+                console.error(`❌ ${label} 加载失败:`, error);
+            });
+        }
+
+        // 四个房间均匀分布在 9m×9m 空间内
+        const spacingX = 2.5;
+        const spacingZ = 2.0;
+        const bedroomOffsetX = 0.85; // 卧室往客厅方向微调
+        const kitchenOffsetZ = 0.5;  // 厨房往卧室方向微调
+        const bathroomOffsetZ = 0.35; // 卫生间往客厅方向微调
+        loadRoom('rooms/bedroom.glb',   0.5, -spacingX + bedroomOffsetX, -spacingZ, 0,              '卧室');
+        loadObjRoom('rooms/livingroom.obj', 'rooms/livingroom.mtl', 0.5, spacingX, -spacingZ, -Math.PI/2, '客厅');
+        loadRoom('rooms/kitchen.glb',   0.5, -spacingX,  spacingZ - kitchenOffsetZ, Math.PI/2,      '厨房', false);
+        loadRoom('rooms/bathroom.glb',  0.5,  spacingX,  spacingZ - bathroomOffsetZ, Math.PI,       '卫生间');
+
+        // 识别卫生间游泳圈（Torus.005，蓝色#1F49CC+白色#CCCCCC双色条纹）
+        (function identifyBathroomItems() {
+            const checkBath = setInterval(() => {
+                const bathroom = scene.children.find(c =>
+                    c.isObject3D && !c.isLight &&
+                    c.position.x > 0 && c.position.z > 0 &&
+                    Math.abs(c.position.x - spacingX) < 2 &&
+                    Math.abs(c.position.z - (spacingZ - bathroomOffsetZ)) < 2
+                );
+                if (!bathroom) return;
+                clearInterval(checkBath);
+
+                let swimRingMesh = null;
+                bathroom.traverse((child) => {
+                    if (child.isMesh && child.name === 'Torus.005') {
+                        const mat = child.material;
+                        const hex = mat && mat.color ? '#' + mat.color.getHexString() : '?';
+                        console.log(`🏊 卫生间Torus.005: 颜色=${hex}, pos=(${child.position.x.toFixed(2)},${child.position.y.toFixed(2)},${child.position.z.toFixed(2)})`);
+                        // 蓝白条纹游泳圈：双基元 #CCCCCC + #1F49CC
+                        if (hex === '#cccccc' || hex === '#1f49cc') {
+                            swimRingMesh = child;
+                            // 计算世界位置
+                            const wp = new THREE.Vector3();
+                            child.getWorldPosition(wp);
+                            console.log(`✅ 游泳圈世界位置: (${wp.x.toFixed(2)}, ${wp.y.toFixed(2)}, ${wp.z.toFixed(2)})`);
+                        }
+                    }
+                });
+            }, 500);
+        })();
+
+        // 过渡墙体：厨房与卫生间之间的浅棕色连接墙
+        const wallStartX = -spacingX + 1.5;
+        const wallEndX = spacingX - 1.5;
+        const wallCenterX = (wallStartX + wallEndX) / 2;
+        const wallLength = wallEndX - wallStartX;
+        const wallZ = (spacingZ - kitchenOffsetZ + spacingZ - bathroomOffsetZ) / 2 + 1.6;
+        const wallGeo = new THREE.BoxGeometry(wallLength, 2.8, 0.3);
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0xE2A66D, roughness: 0.45, metalness: 0.03 });
+        const wall = new THREE.Mesh(wallGeo, wallMat);
+        wall.position.set(wallCenterX, 1.4, wallZ);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+        scene.add(wall);
+        addCollider(wallCenterX, wallZ, wallLength / 2, 0.15); // 过渡墙1碰撞体积
+        console.log('🧱 厨房-卫生间过渡墙已创建');
+
+        // 过渡墙前面的装饰模型（摇篮椅）
+        gltfLoader.load('models/transition_deco.glb', (gltf) => {
+            const deco = gltf.scene;
+            deco.scale.set(0.5, 0.5, 0.5);
+            const chairPosX = wallCenterX + 0.1;   // ≈ 0.1
+            const chairPosZ = wallZ + 0.95;         // ≈ 4.125
+            deco.position.set(chairPosX, 0.3, chairPosZ);
+            deco.rotation.y = Math.PI / 2;
+            deco.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            scene.add(deco);
+
+            // 用 Three.js 自动计算世界坐标系中的精确包围盒
+            const box = new THREE.Box3().setFromObject(deco);
+            const cx = (box.min.x + box.max.x) / 2;
+            const cz = (box.min.z + box.max.z) / 2;
+            const hw = (box.max.x - box.min.x) / 2;
+            const hd = (box.max.z - box.min.z) / 2;
+            console.log(`🪑 摇篮椅包围盒: center=(${cx.toFixed(2)}, ${cz.toFixed(2)}), size=${(hw*2).toFixed(2)}×${(hd*2).toFixed(2)}, Z=[${box.min.z.toFixed(2)}, ${box.max.z.toFixed(2)}]`);
+            
+            addCollider(cx, cz, hw, hd, true, 1.22, 0.91);
+        });
+
+        // 过渡墙2：卫生间与客厅之间
+        const wall2StartZ = -spacingZ + 1.5;
+        const wall2EndZ = spacingZ - bathroomOffsetZ - 1.5;
+        const wall2CenterZ = (wall2StartZ + wall2EndZ) / 2;
+        const wall2Length = wall2EndZ - wall2StartZ;
+        const wall2X = spacingX + 1.8;
+        const wall2Geo = new THREE.BoxGeometry(0.3, 2.8, wall2Length);
+        const wall2Mat = new THREE.MeshStandardMaterial({ color: 0xE2A66D, roughness: 0.45, metalness: 0.03 });
+        const wall2 = new THREE.Mesh(wall2Geo, wall2Mat);
+        wall2.position.set(wall2X, 1.4, wall2CenterZ);
+        wall2.castShadow = true;
+        wall2.receiveShadow = true;
+        scene.add(wall2);
+        addCollider(wall2X, wall2CenterZ, 0.15, wall2Length / 2); // 过渡墙2碰撞体积
+        console.log('🧱 卫生间-客厅过渡墙已创建');
+
+        // ==================== 路径 ====================
+        const pathR = 3.5;
+        const pathPoints = [
+            { x: -pathR, z: -pathR }, { x: 0, z: -pathR }, { x: pathR, z: -pathR },
+            { x: pathR, z: 0 }, { x: pathR, z: pathR },
+            { x: 0, z: pathR }, { x: -pathR, z: pathR },
+            { x: -pathR, z: 0 }, { x: -pathR, z: -pathR }
+        ];
+        const pathMat = new THREE.MeshStandardMaterial({
+            color: 0xF9E79F, roughness: 0.3, transparent: true, opacity: 0.5,
+            emissive: 0xF9E79F, emissiveIntensity: 0.3
+        });
+        for (let i = 0; i < pathPoints.length - 1; i++) {
+            const p1 = pathPoints[i], p2 = pathPoints[i + 1];
+            const dx = p2.x - p1.x, dz = p2.z - p1.z;
+            const dist = Math.sqrt(dx * dx + dz * dz), angle = Math.atan2(dx, dz);
+            const segments = Math.floor(dist / 0.2);
+            for (let s = 0; s < segments; s++) {
+                if (s % 2 === 0) {
+                    const t = s / segments;
+                    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.01, 0.12), pathMat);
+                    seg.position.set(p1.x + dx * t, 0.02, p1.z + dz * t);
+                    seg.rotation.y = angle;
+                    scene.add(seg);
+                }
+            }
+        }
+
+        // ==================== 狗粮碗（摇篮椅旁边）====================
+        const dogBowlGroup = new THREE.Group();
+
+        // 碗体：不锈钢金属质感（圆柱 + 底部圆角）
+        const bowlRadius = 0.25;
+        const bowlHeight = 0.12;
+        const bowlThickness = 0.008;
+        // 外壁
+        const bowlGeo = new THREE.CylinderGeometry(bowlRadius, bowlRadius * 0.65, bowlHeight, 32, 1, true);
+        const bowlMat = new THREE.MeshStandardMaterial({
+            color: 0xC0C0C0, metalness: 0.85, roughness: 0.2,
+            side: THREE.DoubleSide
+        });
+        const bowlOuter = new THREE.Mesh(bowlGeo, bowlMat);
+        bowlOuter.position.y = bowlHeight / 2;
+        dogBowlGroup.add(bowlOuter);
+        // 底部
+        const bowlBottomGeo = new THREE.CircleGeometry(bowlRadius * 0.65, 32);
+        const bowlBottom = new THREE.Mesh(bowlBottomGeo, bowlMat);
+        bowlBottom.rotation.x = -Math.PI / 2;
+        bowlBottom.position.y = 0;
+        dogBowlGroup.add(bowlBottom);
+        // 碗口边缘（加厚环）
+        const rimGeo = new THREE.TorusGeometry(bowlRadius, bowlThickness * 1.5, 8, 32);
+        const rimMat = new THREE.MeshStandardMaterial({
+            color: 0xB0B0B0, metalness: 0.8, roughness: 0.25
+        });
+        const rim = new THREE.Mesh(rimGeo, rimMat);
+        rim.rotation.x = Math.PI / 2;
+        rim.position.y = bowlHeight;
+        dogBowlGroup.add(rim);
+
+        // 狗粮颗粒（棕色小圆球，堆成小山状）
+        const kibbleColor = 0x8B5A2B;
+        const kibbleMat = new THREE.MeshStandardMaterial({
+            color: kibbleColor, roughness: 0.7, metalness: 0.02
+        });
+        const kibbleGeo = new THREE.SphereGeometry(0.012, 6, 5); // 小圆球
+        const kibbleCount = 80; // 颗粒数量
+        for (let i = 0; i < kibbleCount; i++) {
+            const kibble = new THREE.Mesh(kibbleGeo, kibbleMat);
+            // 圆柱坐标系随机分布，中心高边缘低（堆成山）
+            const r = Math.random() * bowlRadius * 0.78;
+            const theta = Math.random() * Math.PI * 2;
+            // 越靠近中心越高
+            const heightFactor = 1 - (r / (bowlRadius * 0.78)) * 0.85;
+            const baseH = bowlHeight * 0.15 + heightFactor * (bowlHeight * 0.75);
+            const jitterY = Math.random() * 0.01;
+            kibble.position.set(
+                r * Math.cos(theta) + (Math.random() - 0.5) * 0.03,
+                baseH + jitterY,
+                r * Math.sin(theta) + (Math.random() - 0.5) * 0.03
+            );
+            // 随机微旋转让每个颗粒看起来不同
+            kibble.rotation.set(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+            dogBowlGroup.add(kibble);
+        }
+
+        // 放置位置：摇篮椅右侧前方一点（摇篮椅约在 wallCenterX+0.1, wallZ+0.95）
+        const bowlPosX = wallCenterX + 0.9 - 0.5 - 0.8;
+        const bowlPosZ = wallZ + 0.55 - 2 + 0.5 + 0.5;
+        dogBowlGroup.position.set(bowlPosX, 0, bowlPosZ);
+        dogBowlGroup.traverse((child) => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        scene.add(dogBowlGroup);
+        console.log('🍖 狗粮碗已放置在摇篮椅旁！');
+
+        // 如果之前互动过，恢复发光
+        if (localStorage.getItem('dogBowlInteracted') === 'true') {
+            dogBowlGroup.traverse((child) => {
+                if (child.isMesh && child.material && child.material.color &&
+                    (child.material.color.getHex() === 0xC0C0C0 || child.material.color.getHex() === 0xB0B0B0)) {
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.6;
+                }
+            });
+        }
+
+        // 狗粮碗碰撞体（小型，不阻挡移动但可交互）
+        addCollider(dogBowlGroup.position.x, dogBowlGroup.position.z, 0.22, 0.22, true, 0.15, 0.075);
+
+        // ==================== 遥控器（客厅桌子上） ====================
+        const remoteGroup = new THREE.Group();
+        const remotePosX = 1.35;
+        const remotePosZ = -1.68;
+        const remotePosY = 0.45; // 桌面高度
+
+        // 遥控器主体：扁长方体
+        const remoteBodyGeo = new THREE.BoxGeometry(0.18, 0.04, 0.06);
+        const remoteBodyMat = new THREE.MeshStandardMaterial({
+            color: 0x333333, metalness: 0.2, roughness: 0.5
+        });
+        const remoteBody = new THREE.Mesh(remoteBodyGeo, remoteBodyMat);
+        remoteBody.position.y = 0;
+        remoteBody.castShadow = true;
+        remoteBody.receiveShadow = true;
+        remoteGroup.add(remoteBody);
+
+        // 按键：几个小凸起方块
+        const btnMat = new THREE.MeshStandardMaterial({
+            color: 0x888888, metalness: 0.1, roughness: 0.4
+        });
+        const btnSize = { w: 0.02, h: 0.006, d: 0.02 };
+        // 方向键区（上方）
+        const btnPositions = [
+            { x: 0, z: 0.015 },          // 上
+            { x: 0, z: -0.015 },         // 下
+            { x: -0.015, z: 0 },         // 左
+            { x: 0.015, z: 0 },          // 右
+            { x: 0, z: 0 },              // 中
+            // 数字键区（下方）
+            { x: -0.04, z: -0.015 },     // 1
+            { x: -0.02, z: -0.015 },     // 2
+            { x: 0, z: -0.015 },         // 3
+            { x: -0.04, z: 0.015 },      // 4
+            { x: -0.02, z: 0.015 },      // 5
+            { x: 0, z: 0.015 },          // 6
+        ];
+        btnPositions.forEach(bp => {
+            const btnGeo = new THREE.BoxGeometry(btnSize.w, btnSize.h, btnSize.d);
+            const btn = new THREE.Mesh(btnGeo, btnMat);
+            btn.position.set(bp.x, 0.02 + btnSize.h / 2, bp.z);
+            btn.castShadow = true;
+            remoteGroup.add(btn);
+        });
+
+        remoteGroup.position.set(remotePosX, remotePosY, remotePosZ);
+        // 稍微旋转使遥控器看起来自然摆放
+        remoteGroup.rotation.y = 0.3;
+        scene.add(remoteGroup);
+        // 如果之前互动过，恢复发光
+        if (localStorage.getItem('remoteInteracted') === 'true') {
+            remoteGroup.traverse((child) => {
+                if (child.isMesh && child.material.emissive) {
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.4;
+                }
+            });
+        }
+        console.log('📺 遥控器已放置在客厅桌子上！');
+
+        // ==================== 法斗模型 ====================
+        const bulldogGroup = new THREE.Group();
+
+        gltfLoader.load('models/french_dog.glb', (gltf) => {
+            const model = gltf.scene;
+            model.scale.set(0.06, 0.06, 0.06);
+            model.position.y = 0.0;
+            model.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            bulldogGroup.add(model);
+            console.log('🐶 GLB法斗模型加载成功！');
+        }, undefined, (error) => {
+            console.error('❌ GLB加载失败:', error);
+        });
+
+        bulldogGroup.position.set(0, 0, 0);
+        scene.add(bulldogGroup);
+
+        // ==================== 主人模型 ====================
+        const ownerGroup = new THREE.Group();
+        gltfLoader.load('models/sofazhuren.glb', (gltf) => {
+            const ownerModel = gltf.scene;
+            ownerModel.scale.set(0.9, 0.9, 0.9);
+            ownerModel.rotation.y = Math.PI;
+            ownerModel.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            // 计算实际包围盒并居中
+            const box = new THREE.Box3().setFromObject(ownerModel);
+            const cx = (box.min.x + box.max.x) / 2;
+            const cy = box.min.y;
+            const cz = (box.min.z + box.max.z) / 2;
+            console.log('👤 主人包围盒: center=(' + cx.toFixed(2) + ',' + cy.toFixed(2) + ',' + cz.toFixed(2) + '), size=' + (box.max.x-box.min.x).toFixed(2) + 'x' + (box.max.y-box.min.y).toFixed(2) + 'x' + (box.max.z-box.min.z).toFixed(2));
+            // 居中模型
+            ownerModel.position.set(-cx, -cy, -cz);
+            ownerGroup.add(ownerModel);
+
+            // 生成手机模型（右手位置）
+            const phoneGroup = new THREE.Group();
+            const phoneBodyGeo = new THREE.BoxGeometry(0.08, 0.14, 0.01);
+            const phoneBodyMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.3, roughness: 0.3 });
+            const phoneBody = new THREE.Mesh(phoneBodyGeo, phoneBodyMat);
+            phoneBody.castShadow = true;
+            phoneGroup.add(phoneBody);
+            // 屏幕
+            const screenGeo = new THREE.BoxGeometry(0.065, 0.1, 0.001);
+            const screenMat = new THREE.MeshStandardMaterial({ color: 0x2c3e50, metalness: 0.1, roughness: 0.2, emissive: 0x111111, emissiveIntensity: 0.3 });
+            const screen = new THREE.Mesh(screenGeo, screenMat);
+            screen.position.z = 0.006;
+            phoneGroup.add(screen);
+            phoneGroup.position.set(-0.1, 0.75, -0.25);
+            phoneGroup.rotation.x = -Math.PI / 4;
+            ownerGroup.add(phoneGroup);
+            console.log('👤 主人模型加载成功！（已居中，含手机）');
+        }, undefined, (error) => {
+            console.error('❌ 主人模型加载失败:', error);
+        });
+        ownerGroup.position.set(1.9, 0, -1.23);
+        scene.add(ownerGroup);
+
+        // ==================== 交互系统 ====================
+        const hintEl = document.getElementById('interact-hint');
+        const feedbackEl = document.getElementById('action-feedback');
+        const flashbackOverlay = document.getElementById('flashback-overlay');
+        let feedbackTimeout = null;
+        let flashbackTimeout = null;
+
+        // 从 localStorage 恢复交互状态
+        let dogBowlInteracted = localStorage.getItem('dogBowlInteracted') === 'true';
+        let toyBallInteracted = localStorage.getItem('toyBallInteracted') === 'true';
+        let remoteInteracted = localStorage.getItem('remoteInteracted') === 'true';
+        let pianoInteracted = localStorage.getItem('pianoInteracted') === 'true';
+        let collarInteracted = localStorage.getItem('collarInteracted') === 'true';
+
+        // 狗粮碗位置（世界坐标，供碰撞检测和每帧检查）
+        const dogBowlWorldPos = new THREE.Vector3(bowlPosX, 0, bowlPosZ);
+
+        const toyBallWorldPos = new THREE.Vector3(0.11, 0, -1.50);
+        // 玩具球碰撞体
+        addCollider(0.11, -1.50, 0.15, 0.15, true, 0.2, 0.10);
+
+        const remoteWorldPos = new THREE.Vector3(remotePosX, 0, remotePosZ);
+        // 遥控器碰撞体（桌面上）
+        addCollider(remotePosX, remotePosZ, 0.15, 0.10, true, 0.08, 0.49);
+
+        // 狗叫声已删除（等待导入音频文件）
+
+        // ==================== 遥控器叼取序列 ====================
+        const REMOTE_SEQUENCE = {
+            INITIAL_POS: new THREE.Vector3(1.35, 0.45, -1.68),
+            DROP_POS: new THREE.Vector3(1.8, 0.05, -0.5),
+            SPIN_SPEED: Math.PI * 1.2,  // 0.6秒一圈
+            SPIN_TOTAL: Math.PI * 4,     // 转两圈
+            WAIT_TIME: 2.0,
+            MOUTH_OFFSET: new THREE.Vector3(0.02, 0.58, 0.35),
+        };
+        let remoteSeqState = 'IDLE'; // IDLE→PICKUP→SPIN→DROP→RESET→IDLE
+        let remoteSeqSpinAngle = 0;
+        let remoteSeqTimer = 0;
+        let remoteSeqLocked = false; // 禁用玩家控制
+        const remoteOriginalPos = remoteGroup.position.clone();
+        const remoteOriginalRot = remoteGroup.rotation.clone();
+
+        // 计算法斗嘴部世界位置（基于法斗朝向 + 固定偏移）
+        function getBulldogMouthPos() {
+            const forward = new THREE.Vector3(0, 0, 0.30);
+            forward.applyQuaternion(bulldogGroup.quaternion);
+            const pos = bulldogGroup.position.clone().add(forward);
+            pos.y += 0.40;
+            return pos;
+        }
+
+        // 遥控器序列动画函数（在animate循环中调用）
+        function updateRemoteSequence(dt) {
+            if (remoteSeqState === 'IDLE') return;
+
+            if (remoteSeqState === 'PICKUP') {
+                // 遥控器瞬移到法斗嘴部（基于模型包围盒）
+                remoteGroup.position.copy(getBulldogMouthPos());
+                remoteGroup.rotation.set(0.3, bulldogGroup.rotation.y + 0.2, 0);
+                remoteSeqState = 'SPIN';
+                remoteSeqSpinAngle = 0;
+                showFeedback('🐶 汪！汪！...');
+            }
+
+            if (remoteSeqState === 'SPIN') {
+                const spinAmount = REMOTE_SEQUENCE.SPIN_SPEED * dt;
+                remoteSeqSpinAngle += spinAmount;
+                bulldogGroup.rotation.y += spinAmount;
+                // 遥控器跟随嘴部位置
+                remoteGroup.position.copy(getBulldogMouthPos());
+                remoteGroup.rotation.set(0.3, bulldogGroup.rotation.y + 0.2, 0);
+
+                // 转圈时每隔一定角度叫一声
+                const prevQuarter = Math.floor((remoteSeqSpinAngle - spinAmount) / (Math.PI / 2));
+                const curQuarter = Math.floor(remoteSeqSpinAngle / (Math.PI / 2));
+                if (curQuarter > prevQuarter && remoteSeqSpinAngle < REMOTE_SEQUENCE.SPIN_TOTAL - 0.3) {
+                    playBark();
+                }
+
+                if (remoteSeqSpinAngle >= REMOTE_SEQUENCE.SPIN_TOTAL) {
+                    // 转完两圈，直接重置回茶几
+                    remoteGroup.position.copy(REMOTE_SEQUENCE.INITIAL_POS);
+                    remoteGroup.rotation.copy(remoteOriginalRot);
+                    remoteSeqState = 'RESET';
+                    remoteSeqTimer = 0;
+                }
+            }
+
+            if (remoteSeqState === 'RESET') {
+                // 闪回触发
+                triggerRemoteFetchFlashback();
+                remoteSeqLocked = false;
+                remoteSeqState = 'IDLE';
+                // 恢复互动提示
+                hintEl.classList.remove('visible');
+            }
+        }
+
+        // 主人NPC头部倾斜（低头看手机）
+        let ownerHeadBone = null;
+        function setupOwnerPose() {
+            if (!ownerGroup.children[0]) return;
+            let found = false;
+            ownerGroup.children[0].traverse((child) => {
+                if (child.isBone && (child.name.toLowerCase().includes('head') ||
+                    child.name.toLowerCase().includes('头') ||
+                    child.name.includes('_6') || child.name.includes('neck'))) {
+                    ownerHeadBone = child;
+                    child.rotation.x = Math.PI / 9; // 低头约20度
+                    found = true;
+                    console.log('👤 主人头部已倾斜！骨:', child.name);
+                }
+            });
+            // 没找到骨骼时不操作整个模型
+            if (!found) {
+                console.log('👤 未找到头部骨骼，保持原始姿态');
+            }
+        }
+        // 主人加载完成后设置姿态
+        (function waitOwner() {
+            if (ownerGroup.children.length > 0) {
+                setupOwnerPose();
+            } else {
+                setTimeout(waitOwner, 200);
+            }
+        })();
+
+        // 遥控器叼取闪回
+        const flashbackFetchOverlay = (function() {
+            const ov = document.createElement('div');
+            ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;opacity:0;transition:opacity 1.2s ease-in-out;';
+            const blur = document.createElement('div');
+            blur.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);';
+            const sepia = document.createElement('div');
+            sepia.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.35);filter:blur(2px) sepia(0.7) saturate(0.8);';
+            const text = document.createElement('div');
+            text.id = 'flashback-fetch-text';
+            text.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;';
+            text.textContent = '以前，他会笑着接过遥控器，\n把我抱到沙发上一起看。';
+            ov.appendChild(blur); ov.appendChild(sepia); ov.appendChild(text);
+            document.body.appendChild(ov);
+            return { overlay: ov, text: text };
+        })();
+
+        function triggerRemoteFetchFlashback() {
+            flashbackFetchOverlay.overlay.style.opacity = '1';
+            flashbackFetchOverlay.text.style.opacity = '1';
+            // 遥控器发光恢复
+            remoteGroup.traverse((child) => {
+                if (child.isMesh && child.material && child.material.emissive !== undefined) {
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.4;
+                }
+            });
+            setTimeout(() => {
+                flashbackFetchOverlay.overlay.style.opacity = '0';
+                flashbackFetchOverlay.text.style.opacity = '0';
+            }, 3000);
+        }
+
+        // 钢琴位置（世界坐标：X≈3.83, Z≈-1.96）
+        const pianoWorldPos = new THREE.Vector3(3.83, 0, -1.96);
+        // 钢琴碰撞体（朝±z方向延长）
+        addCollider(3.83, -1.96, 0.35, 1.95, true, 0.5, 0.25);
+
+        // 游泳圈位置（卫生间内 Torus.005）
+        const swimRingWorldPos = new THREE.Vector3(2.19, 0.67, 0.2);
+
+        // 项圈位置（卧室衣柜内，平放在地上）
+        const collarWorldPos = new THREE.Vector3(-3.30, 0.82, -0.55);
+
+        // ==================== 项圈3D模型 ====================
+        const collarGroup = new THREE.Group();
+
+        // 深棕色皮质项圈主体（平放在衣柜地上）
+        const collarGeo = new THREE.TorusGeometry(0.12, 0.035, 16, 32);
+        const collarMat = new THREE.MeshStandardMaterial({
+            color: 0x5C3317, roughness: 0.45, metalness: 0.08
+        });
+        const collarMesh = new THREE.Mesh(collarGeo, collarMat);
+        collarMesh.rotation.x = Math.PI / 2;
+        collarMesh.castShadow = true;
+        collarMesh.receiveShadow = true;
+        collarGroup.add(collarMesh);
+
+        // 缝线纹理环
+        const collarGeo2 = new THREE.TorusGeometry(0.123, 0.008, 12, 32);
+        const collarMat2 = new THREE.MeshStandardMaterial({
+            color: 0x3D2211, roughness: 0.55, metalness: 0.05
+        });
+        const collarMesh2 = new THREE.Mesh(collarGeo2, collarMat2);
+        collarMesh2.rotation.x = Math.PI / 2;
+        collarMesh2.castShadow = true;
+        collarGroup.add(collarMesh2);
+
+        // 搭扣
+        const buckleGeo = new THREE.BoxGeometry(0.04, 0.02, 0.04);
+        const buckleMat = new THREE.MeshStandardMaterial({
+            color: 0xFFD700, roughness: 0.1, metalness: 1.0
+        });
+        const buckleMesh = new THREE.Mesh(buckleGeo, buckleMat);
+        buckleMesh.position.set(0, 0.01, 0.12);
+        buckleMesh.castShadow = true;
+        collarGroup.add(buckleMesh);
+
+        // 纯金吊牌（平放在项圈侧面地上）
+        const tagGeo = new THREE.BoxGeometry(0.06, 0.08, 0.012);
+        const tagMat = new THREE.MeshStandardMaterial({
+            color: 0xFFD700, roughness: 0.05, metalness: 1.0
+        });
+        const tagMesh = new THREE.Mesh(tagGeo, tagMat);
+        tagMesh.position.set(0.15, 0.01, 0);
+        tagMesh.rotation.z = -0.3;
+        tagMesh.castShadow = true;
+        collarGroup.add(tagMesh);
+
+        // 吊牌连接小环
+        const ringGeo = new THREE.TorusGeometry(0.015, 0.004, 8, 12);
+        const ringMesh = new THREE.Mesh(ringGeo, buckleMat);
+        ringMesh.position.set(0, 0.015, 0.12);
+        ringMesh.castShadow = true;
+        collarGroup.add(ringMesh);
+
+        // 如果之前互动过，恢复发光
+        if (collarInteracted) {
+            collarGroup.traverse((child) => {
+                if (child.isMesh && child.material.emissive !== undefined) {
+                    child.material = child.material.clone();
+                    child.material.emissive = new THREE.Color(0xFFD700);
+                    child.material.emissiveIntensity = 0.5;
+                }
+            });
+        }
+
+        collarGroup.position.copy(collarWorldPos);
+        scene.add(collarGroup);
+        // 项圈碰撞体
+        addCollider(collarWorldPos.x, collarWorldPos.z, 0.20, 0.15, true, 0.15, collarWorldPos.y);
+
+        // ==================== 狗绳模型 ====================
+        const leashWorldPos = new THREE.Vector3(-1.24, 0.06, 0.44);
+        const leashGroup = new THREE.Group();
+
+        const Y = 0.01;
+        const R = 0.018;
+        const matUpper = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.5, metalness: 0.05 });
+        const matLower = new THREE.MeshStandardMaterial({ color: 0x6B3410, roughness: 0.55, metalness: 0.03 });
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.12, depthWrite: false });
+
+        function makeTube(pList, mat, yOff) {
+            const curve = new THREE.CatmullRomCurve3(pList, false, 'catmullrom', 0.5);
+            const t = new THREE.Mesh(new THREE.TubeGeometry(curve, 60, R, 8, false), mat);
+            t.position.y = Y + yOff;
+            t.castShadow = true;
+            return t;
+        }
+
+        function makeShadow(x, z, len) {
+            const s = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.002, len), shadowMat);
+            s.position.set(x, Y + 0.003, z);
+            return s;
+        }
+
+        // ── 段1：外圈右下（下层，深色）──
+        leashGroup.add(makeTube([
+            new THREE.Vector3(-0.14, 0,  0.00),
+            new THREE.Vector3(-0.06, 0, -0.06),
+            new THREE.Vector3( 0.04, 0, -0.14),
+            new THREE.Vector3( 0.14, 0, -0.06),
+        ], matLower, 0.001));
+
+        // ── 段2：外圈从右向上（上层，跨段1）──
+        leashGroup.add(makeTube([
+            new THREE.Vector3( 0.14, 0, -0.06),
+            new THREE.Vector3( 0.12, 0,  0.04),
+            new THREE.Vector3( 0.04, 0,  0.12),
+            new THREE.Vector3(-0.08, 0,  0.14),
+        ], matUpper, 0.005));
+
+        // ── 段3：外圈从左上绕回（下层）──
+        leashGroup.add(makeTube([
+            new THREE.Vector3(-0.08, 0,  0.14),
+            new THREE.Vector3(-0.14, 0,  0.06),
+            new THREE.Vector3(-0.12, 0, -0.02),
+        ], matLower, 0.001));
+
+        // ── 段4：从左边斜穿到右边（上层，跨段1+3）──
+        leashGroup.add(makeTube([
+            new THREE.Vector3(-0.12, 0, -0.02),
+            new THREE.Vector3(-0.04, 0,  0.02),
+            new THREE.Vector3( 0.04, 0, -0.06),
+            new THREE.Vector3( 0.12, 0, -0.02),
+        ], matUpper, 0.007));
+
+        // ── 段5：从右上穿到左下（上层）──
+        leashGroup.add(makeTube([
+            new THREE.Vector3( 0.12, 0, -0.02),
+            new THREE.Vector3( 0.04, 0,  0.06),
+            new THREE.Vector3(-0.04, 0,  0.04),
+            new THREE.Vector3(-0.10, 0, -0.04),
+        ], matUpper, 0.005));
+
+        // ── 段6：尾巴收束（上层）──
+        leashGroup.add(makeTube([
+            new THREE.Vector3(-0.10, 0, -0.04),
+            new THREE.Vector3(-0.06, 0, -0.10),
+            new THREE.Vector3( 0.02, 0, -0.10),
+            new THREE.Vector3( 0.06, 0, -0.06),
+            new THREE.Vector3( 0.08, 0, -0.02),
+        ], matUpper, 0.006));
+
+        leashGroup.add(makeShadow(0.10,-0.08,0.24));
+        leashGroup.add(makeShadow(-0.06,0.10,0.22));
+        leashGroup.add(makeShadow(0.02,0.00,0.18));
+
+        // 金属扣（银白色，挂在绳上）
+        const clipMat = new THREE.MeshStandardMaterial({ color: 0xCCCCCC, roughness: 0.15, metalness: 1.0 });
+        const clip = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.06), clipMat);
+        clip.position.set(-0.12, Y + 0.01, -0.02);
+        clip.castShadow = true;
+        leashGroup.add(clip);
+
+        leashGroup.position.copy(leashWorldPos);
+        scene.add(leashGroup);
+
+        // ==================== 病历 ====================
+        var medicalPos = new THREE.Vector3(2.66, 0.003, -2.74);
+        var medicalGroup = new THREE.Group();
+        var medCanvas = document.createElement('canvas');
+        medCanvas.width = 256; medCanvas.height = 358;
+        var mc = medCanvas.getContext('2d');
+        mc.fillStyle = '#F5F0E0'; mc.fillRect(0, 0, 256, 358);
+        mc.fillStyle = '#CC0000';
+        mc.fillRect(20, 15, 30, 10);
+        mc.fillRect(25, 10, 20, 20);
+        mc.fillStyle = '#333';
+        mc.font = 'bold 16px serif';
+        mc.fillText('就诊记录', 70, 30);
+        mc.strokeStyle = '#AAA';
+        mc.lineWidth = 1;
+        mc.beginPath(); mc.moveTo(15, 40); mc.lineTo(241, 40); mc.stroke();
+        mc.strokeStyle = '#555';
+        mc.lineWidth = 2;
+        var yPos = 55;
+        for (var li = 0; li < 8; li++) {
+            yPos += 28;
+            mc.beginPath();
+            mc.moveTo(20, yPos);
+            var lx = 20;
+            while (lx < 220) {
+                lx += 15 + 40 * Math.random();
+                mc.lineTo(lx, yPos + (Math.random() - 0.5) * 5);
+            }
+            mc.stroke();
+        }
+        mc.strokeStyle = '#1a5276';
+        mc.lineWidth = 3;
+        mc.beginPath();
+        mc.arc(200, 310, 25, 0, Math.PI * 2);
+        mc.stroke();
+        mc.fillStyle = '#1a5276';
+        mc.font = 'bold 10px sans-serif';
+        mc.fillText('XX医院', 178, 305);
+        mc.font = '8px sans-serif';
+        mc.fillText('2024.03', 180, 322);
+        var medTex = new THREE.CanvasTexture(medCanvas);
+
+        var paperWidth = 0.3; var paperHeight = 0.42;
+        var paperGeo = new THREE.PlaneGeometry(paperWidth, paperHeight);
+        var paperMat = new THREE.MeshStandardMaterial({ map: medTex, roughness: 0.7, side: THREE.DoubleSide });
+        var paper = new THREE.Mesh(paperGeo, paperMat);
+        paper.rotation.x = -Math.PI / 2 + 0.15;
+        paper.position.y = 0.015;
+        medicalGroup.add(paper);
+
+        var shadowGeo2 = new THREE.PlaneGeometry(paperWidth + 0.04, paperHeight + 0.04);
+        var shadowMat2 = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.15, depthWrite: false, side: THREE.DoubleSide });
+        var shadowPlane = new THREE.Mesh(shadowGeo2, shadowMat2);
+        shadowPlane.rotation.x = -Math.PI / 2;
+        shadowPlane.position.y = 0.001;
+        medicalGroup.add(shadowPlane);
+
+        medicalGroup.position.copy(medicalPos);
+        medicalGroup.position.y = 0.01;
+        medicalGroup.rotation.y = 0.35;
+        scene.add(medicalGroup);
+
+        var medGlow = new THREE.PointLight(0xFFD700, 0, 1.2);
+        medGlow.position.copy(medicalPos);
+        medGlow.position.y += 0.08;
+        scene.add(medGlow);
+
+        var medicalRecordInteracted = localStorage.getItem('medicalRecordInteracted') === 'true';
+        if (medicalRecordInteracted) {
+            medGlow.intensity = 0.8;
+            paper.material = paper.material.clone();
+            paper.material.emissive = new THREE.Color(0xFFD700);
+            paper.material.emissiveIntensity = 0.3;
+        }
+
+        function triggerMedicalFlashback() {
+            if (medicalRecordInteracted) return;
+            medicalRecordInteracted = true;
+            localStorage.setItem('medicalRecordInteracted', 'true');
+            paper.material = paper.material.clone();
+            paper.material.emissive = new THREE.Color(0xFFD700);
+            paper.material.emissiveIntensity = 0.3;
+            medGlow.intensity = 0.8;
+
+            var ov = document.createElement('div');
+            ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;';
+            var blurDiv = document.createElement('div');
+            blurDiv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px);';
+            var sepiaDiv = document.createElement('div');
+            sepiaDiv.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.3);filter:sepia(0.6) saturate(0.7);';
+            var textEl = document.createElement('div');
+            textEl.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 2px 8px rgba(0,0,0,0.7);text-align:center;';
+            textEl.textContent = '……消毒水的味道。\n我不喜欢那个地方。';
+            ov.appendChild(blurDiv); ov.appendChild(sepiaDiv); ov.appendChild(textEl);
+            document.body.appendChild(ov);
+            setTimeout(function(){ ov.style.transition='opacity 0.8s'; ov.style.opacity='0'; setTimeout(function(){ document.body.removeChild(ov); },800); },3000);
+            console.log('病历闪回触发');
+        }
+
+        // 狗绳碰撞检测
+        addCollider(leashWorldPos.x, leashWorldPos.z, 0.20, 0.15, true, 0.12, leashWorldPos.y);
+
+        // 狗绳交互状态
+        let leashInteracted = localStorage.getItem('leashInteracted') === 'true';
+
+        // 恢复发光
+        if (leashInteracted) {
+            leashGroup.traverse((child) => {
+                if (child.isMesh && child.material.emissive) {
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.5;
+                }
+            });
+        }
+
+        // 狗绳闪回
+        function triggerLeashFlashback() {
+            if (leashInteracted) return;
+            leashInteracted = true;
+            localStorage.setItem('leashInteracted', 'true');
+
+            // 发光
+            leashGroup.traverse((child) => {
+                if (child.isMesh && child.material.emissive !== undefined) {
+                    child.material = child.material.clone();
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.5;
+                }
+            });
+
+            // 闪回叠加层
+            const ov = document.createElement('div');
+            ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;';
+            const blur = document.createElement('div');
+            blur.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px);';
+            const sepia = document.createElement('div');
+            sepia.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.3);filter:sepia(0.6) saturate(0.7);';
+            const text = document.createElement('div');
+            text.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;';
+            text.textContent = '……灰尘很厚，\n很久没被牵出去了。';
+            ov.appendChild(blur); ov.appendChild(sepia); ov.appendChild(text);
+            document.body.appendChild(ov);
+
+            setTimeout(() => {
+                ov.style.transition = 'opacity 0.8s';
+                ov.style.opacity = '0';
+                setTimeout(() => document.body.removeChild(ov), 800);
+            }, 3000);
+
+            console.log('🦮 狗绳闪回触发');
+        }
+
+        function showFeedback(text) {
+            feedbackEl.textContent = text;
+            feedbackEl.classList.add('show');
+            clearTimeout(feedbackTimeout);
+            feedbackTimeout = setTimeout(() => feedbackEl.classList.remove('show'), 2500);
+        }
+
+        // 闪回效果（狗粮碗）
+        function triggerFlashback() {
+            if (dogBowlInteracted) return;
+            dogBowlInteracted = true;
+            localStorage.setItem('dogBowlInteracted', 'true');
+
+            // 激活闪回叠加层
+            flashbackOverlay.classList.add('active');
+
+            // 碗交互后发光变色
+            dogBowlGroup.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    if (child.material.color &&
+                        (child.material.color.getHex() === 0xC0C0C0 ||
+                         child.material.color.getHex() === 0xB0B0B0)) {
+                        child.material.emissive = new THREE.Color(0xFFE4B5);
+                        child.material.emissiveIntensity = 0.6;
+                    }
+                }
+            });
+
+            // 3秒后自动消失
+            clearTimeout(flashbackTimeout);
+            flashbackTimeout = setTimeout(() => {
+                flashbackOverlay.classList.remove('active');
+            }, 3000);
+
+            console.log('💭 闪回效果触发：总是满的...但最近没什么味道了。');
+        }
+
+        // 闪回效果（玩具球）
+        const flashbackBallOverlay = document.getElementById('flashback-ball-overlay');
+        const flashbackBallText = document.getElementById('flashback-ball-text');
+        let flashbackBallTimeout = null;
+
+        function triggerBallFlashback() {
+            if (toyBallInteracted) return;
+            toyBallInteracted = true;
+            localStorage.setItem('toyBallInteracted', 'true');
+
+            // 激活玩具球闪回叠加层
+            flashbackBallOverlay.style.opacity = '1';
+            flashbackBallText.style.opacity = '1';
+
+            // 球体发光变色
+            if (toyBallMesh) {
+                toyBallMesh.material = toyBallMesh.material.clone();
+                toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
+                toyBallMesh.material.emissiveIntensity = 0.5;
+            }
+
+            // 弹跳动画：向上跳起0.05再落下
+            let bounceTime = 0;
+            const bounceDuration = 0.4;
+            const bounceHeight = 0.05;
+            const originalY = toyBallMesh ? toyBallMesh.position.y : 0;
+
+            function animateBounce() {
+                if (!toyBallMesh) return;
+                bounceTime += 0.016;
+                const t = bounceTime / bounceDuration;
+                if (t >= 1) {
+                    toyBallMesh.position.y = originalY;
+                    return;
+                }
+                // 抛物线弹跳
+                const bounce = bounceHeight * 4 * t * (1 - t);
+                toyBallMesh.position.y = originalY + bounce;
+                requestAnimationFrame(animateBounce);
+            }
+            animateBounce();
+
+            // 3秒后消失，然后跳转到篮球游戏
+            clearTimeout(flashbackBallTimeout);
+            flashbackBallTimeout = setTimeout(() => {
+                flashbackBallOverlay.style.opacity = '0';
+                flashbackBallText.style.opacity = '0';
+                // 跳转到篮球游戏
+                setTimeout(() => {
+                    window.location.href = 'basketball_game.html';
+                }, 500);
+            }, 3000);
+
+            console.log('🏀 闪回效果触发：这个球是主人最常扔的…');
+        }
+
+        // 闪回效果（遥控器）
+        const flashbackRemoteOverlay = document.getElementById('flashback-remote-overlay');
+        const flashbackRemoteText = document.getElementById('flashback-remote-text');
+        let flashbackRemoteTimeout = null;
+
+        function triggerRemoteFlashback() {
+            if (remoteInteracted) return;
+            remoteInteracted = true;
+            localStorage.setItem('remoteInteracted', 'true');
+
+
+            flashbackRemoteOverlay.style.opacity = '1';
+            flashbackRemoteText.style.opacity = '1';
+
+            // 遥控器发光
+            remoteGroup.traverse((child) => {
+                if (child.isMesh && child.material.emissive) {
+                    child.material.emissive = new THREE.Color(0xFFE4B5);
+                    child.material.emissiveIntensity = 0.4;
+                }
+            });
+
+            clearTimeout(flashbackRemoteTimeout);
+            flashbackRemoteTimeout = setTimeout(() => {
+                flashbackRemoteOverlay.style.opacity = '0';
+                flashbackRemoteText.style.opacity = '0';
+            }, 3000);
+
+            console.log('📺 闪回效果触发：以前主人抱着我一起看电视…');
+        }
+
+        // 遥控器叼取序列触发
+        function startRemoteSequence() {
+            if (remoteSeqLocked || remoteSeqState !== 'IDLE') return;
+            remoteInteracted = true;
+            localStorage.setItem('remoteInteracted', 'true');
+            remoteSeqLocked = true;
+            remoteSeqState = 'PICKUP';
+            hintEl.classList.remove('visible');
+            // 清空移动键防止法斗惯性移动
+            keyState.w = false; keyState.a = false; keyState.s = false; keyState.d = false;
+            showFeedback('🐶 叼起遥控器...');
+            console.log('🐶 遥控器叼取序列开始！');
+        }
+
+        // ==================== 项圈双视角短片 ====================
+        const collarChoiceOverlay = document.getElementById('collar-choice-overlay');
+        const collarVideoOverlay = document.getElementById('collar-video-overlay');
+        const collarVideoElement = document.getElementById('collar-video-element');
+        const collarVideoTitle = document.getElementById('collar-video-title');
+        const collarVideoHint = document.getElementById('collar-video-hint');
+        const collarVideoPlayBtn = document.getElementById('collar-video-play');
+        const collarVideoCloseBtn = document.getElementById('collar-video-close');
+        const collarBtnA = document.getElementById('collar-btn-a');
+        const collarBtnB = document.getElementById('collar-btn-b');
+
+        let currentVideoType = null; // 'a' | 'b'
+
+        function triggerCollarInteraction() {
+            if (collarInteracted || pianoGameActive) return;
+
+            // 禁用3D场景
+            renderer.domElement.style.pointerEvents = 'none';
+            hintEl.classList.remove('visible');
+
+            // 显示视角选择
+            collarChoiceOverlay.style.display = 'flex';
+        }
+
+        function closeCollarChoice() {
+            collarChoiceOverlay.style.display = 'none';
+            renderer.domElement.style.pointerEvents = '';
+        }
+
+        function playCollarVideo(type) {
+            currentVideoType = type;
+            collarChoiceOverlay.style.display = 'none';
+
+            // 配置视频
+            const videoFile = type === 'a' ? 'collar_video_a.mp4' : 'collar_video_b.mp4';
+            const titleText = type === 'a'
+                ? '🐶 小八的记忆 — 第一次戴项圈'
+                : '👤 主人的记忆 — 为你戴上项圈';
+
+            collarVideoTitle.textContent = titleText;
+            collarVideoElement.src = videoFile;
+            collarVideoElement.style.display = 'block';
+            collarVideoHint.style.display = 'none';
+            collarVideoOverlay.style.display = 'block';
+
+            // 尝试自动播放
+            collarVideoElement.play().catch(() => {
+                // 自动播放被阻止，显示提示
+                collarVideoHint.style.display = 'block';
+                collarVideoHint.innerHTML = '点击 ▶ 播放 按钮开始观看<br><span style="font-size:13px;">（替换 ' + videoFile + ' 为真实视频）</span>';
+            });
+
+            collarVideoPlayBtn.textContent = '⏸ 暂停';
+        }
+
+        function closeCollarVideo() {
+            collarVideoElement.pause();
+            collarVideoElement.src = '';
+            collarVideoElement.style.display = 'none';
+            collarVideoHint.style.display = 'block';
+            collarVideoHint.innerHTML = '视频占位区域<br><span style="font-size:13px;">替换 collar_video_a.mp4 或 collar_video_b.mp4 即可播放</span>';
+            collarVideoOverlay.style.display = 'none';
+            currentVideoType = null;
+
+            // 标记已互动
+            if (!collarInteracted) {
+                collarInteracted = true;
+                localStorage.setItem('collarInteracted', 'true');
+                // 项圈发光
+                collarGroup.traverse((child) => {
+                    if (child.isMesh && child.material.emissive !== undefined) {
+                        child.material = child.material.clone();
+                        child.material.emissive = new THREE.Color(0xFFD700);
+                        child.material.emissiveIntensity = 0.5;
+                    }
+                });
+            }
+
+            renderer.domElement.style.pointerEvents = '';
+        }
+
+        // 视频结束自动关闭
+        collarVideoElement.addEventListener('ended', () => {
+            closeCollarVideo();
+        });
+
+        // 播放/暂停按钮
+        collarVideoPlayBtn.addEventListener('click', () => {
+            if (!currentVideoType) return;
+            if (collarVideoElement.paused) {
+                collarVideoElement.play();
+                collarVideoPlayBtn.textContent = '⏸ 暂停';
+            } else {
+                collarVideoElement.pause();
+                collarVideoPlayBtn.textContent = '▶ 播放';
+            }
+        });
+
+        // 关闭按钮
+        collarVideoCloseBtn.addEventListener('click', closeCollarVideo);
+
+        // 选择按钮
+        collarBtnA.addEventListener('click', () => playCollarVideo('a'));
+        collarBtnB.addEventListener('click', () => playCollarVideo('b'));
+
+        // ESC 关闭选择面板
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Escape') {
+                if (collarChoiceOverlay.style.display === 'flex') {
+                    closeCollarChoice();
+                }
+            }
+        });
+
+        // ==================== 钢琴节奏小游戏 ====================
+        const pianoOverlay = document.getElementById('piano-game-overlay');
+        const pianoCanvas = document.getElementById('piano-canvas');
+        const pianoCtx = pianoCanvas.getContext('2d');
+        const pianoScoreEl = document.getElementById('piano-score');
+        const pianoMistakesEl = document.getElementById('piano-mistakes');
+        const pianoResultEl = document.getElementById('piano-result');
+        const pianoResultText = document.getElementById('piano-result-text');
+        const pianoResultHint = document.getElementById('piano-result-hint');
+
+        // 游戏状态
+        let pianoGameActive = false;
+        let pianoGameOver = false;
+        let pianoGameResult = null; // 'win' | 'lose' | null
+        let pianoScore = 0;
+        let pianoMistakes = 0;
+        const pianoMaxMistakes = 3;
+
+        // 琴键配置
+        const WHITE_KEYS = 8;
+        const keyNames = ['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4', 'C5'];
+        const noteFrequencies = {
+            'C4': 261.63, 'D4': 293.66, 'E4': 329.63, 'F4': 349.23,
+            'G4': 392.00, 'A4': 440.00, 'B4': 493.88, 'C5': 523.25
+        };
+
+        // 预设旋律：《小星星》前28个音符
+        const melodyNotes = [
+            'C4', 'C4', 'G4', 'G4', 'A4', 'A4', 'G4',
+            'F4', 'F4', 'E4', 'E4', 'D4', 'D4', 'C4',
+            'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4',
+            'G4', 'G4', 'F4', 'F4', 'E4', 'E4', 'D4'
+        ];
+
+        // 下落音符
+        let fallingNotes = [];
+        const FALL_SPEED = 130; // px/s
+        const TRACK_Y_START = -60;
+        const TRIGGER_LINE_RATIO = 0.55;
+
+        // 动画相关
+        let pianoLastTime = 0;
+        let pianoAnimId = null;
+
+        // 琴键发光效果
+        let keyGlows = {};      // { keyIndex: { time, color } }
+        let keyShakes = {};     // { keyIndex: time }
+
+        function getKeyIndex(noteName) {
+            return keyNames.indexOf(noteName);
+        }
+
+        function pianoNoteToFrequency(noteName) {
+            return noteFrequencies[noteName] || 440;
+        }
+
+        // 播放音符音效
+        function playPianoNote(noteName, duration = 0.5, volume = 0.3) {
+            const freq = pianoNoteToFrequency(noteName);
+            const now = audioCtx.currentTime;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now);
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(freq * 3, now);
+            filter.Q.setValueAtTime(1, now);
+
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(volume, now + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+            osc.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + duration);
+
+            // 叠加泛音
+            const osc2 = audioCtx.createOscillator();
+            const gain2 = audioCtx.createGain();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(freq * 2, now);
+            gain2.gain.setValueAtTime(0, now);
+            gain2.gain.linearRampToValueAtTime(volume * 0.15, now + 0.01);
+            gain2.gain.exponentialRampToValueAtTime(0.001, now + duration * 0.6);
+            osc2.connect(gain2);
+            gain2.connect(audioCtx.destination);
+            osc2.start(now);
+            osc2.stop(now + duration * 0.6);
+        }
+
+        // 播放错误音效
+        function playWrongNoteSound() {
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(120, now);
+            osc.frequency.linearRampToValueAtTime(80, now + 0.3);
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 0.3);
+        }
+
+        // 播放胜利旋律
+        function playVictoryMelody() {
+            const melody = [
+                'C4','C4','G4','G4','A4','A4','G4',
+                'F4','F4','E4','E4','D4','D4','C4',
+                'G4','G4','F4','F4','E4','E4','D4',
+                'G4','G4','F4','F4','E4','E4','D4'
+            ];
+            const phraseEnds = new Set([6, 13, 20]);
+            let acc = 0;
+            melody.forEach((note, i) => {
+                if (phraseEnds.has(i - 1)) acc += 300;
+                const delay = i * 380 + acc;
+                setTimeout(() => playPianoNote(note, 0.6, 0.35), delay);
+            });
+        }
+
+        // 调整Canvas大小
+        function resizePianoCanvas() {
+            pianoCanvas.width = window.innerWidth;
+            pianoCanvas.height = window.innerHeight;
+        }
+
+        // 初始化游戏
+        function initPianoGame() {
+            pianoGameActive = true;
+            pianoGameOver = false;
+            pianoGameResult = null;
+            pianoScore = 0;
+            pianoMistakes = 0;
+            fallingNotes = [];
+            keyGlows = {};
+            keyShakes = {};
+
+            // 生成下落音符，小节之间插入额外间隔
+            const phraseEnds = new Set([6, 13, 20]); // 每小节最后一个音符索引
+            let accumulatedOffset = 0;
+            melodyNotes.forEach((noteName, i) => {
+                if (phraseEnds.has(i - 1)) accumulatedOffset += 120; // 小节间间隔
+                const keyIndex = getKeyIndex(noteName);
+                if (keyIndex >= 0) {
+                    fallingNotes.push({
+                        keyIndex: keyIndex,
+                        noteName: noteName,
+                        y: TRACK_Y_START - (i * 90 + accumulatedOffset),
+                        active: true,
+                        hit: false,
+                        missed: false
+                    });
+                }
+            });
+
+            pianoScoreEl.textContent = '';
+            pianoMistakesEl.textContent = '';
+            pianoResultEl.style.display = 'none';
+
+            resizePianoCanvas();
+            pianoOverlay.style.display = 'block';
+            pianoLastTime = performance.now();
+
+            // 隐藏3D场景UI
+            hintEl.classList.remove('visible');
+            document.getElementById('controls-hint').style.opacity = '0';
+            document.getElementById('pos-display').style.opacity = '0';
+
+            // 禁用3D场景交互
+            renderer.domElement.style.pointerEvents = 'none';
+
+            if (pianoAnimId) cancelAnimationFrame(pianoAnimId);
+            pianoAnimId = requestAnimationFrame(pianoGameLoop);
+        }
+
+        // 退出游戏
+        function exitPianoGame() {
+            pianoGameActive = false;
+            pianoGameOver = false;
+            if (pianoAnimId) cancelAnimationFrame(pianoAnimId);
+            pianoAnimId = null;
+            pianoOverlay.style.display = 'none';
+            renderer.domElement.style.pointerEvents = '';
+            document.getElementById('controls-hint').style.opacity = '';
+            document.getElementById('pos-display').style.opacity = '';
+        }
+
+        // 点击琴键处理
+        function handlePianoClick(mx, my) {
+            if (!pianoGameActive || pianoGameOver) return;
+
+            const w = pianoCanvas.width;
+            const h = pianoCanvas.height;
+            const keyAreaTop = h * 0.40;
+            const keyAreaBottom = h * 0.80;
+            const keyWidth = w * 0.85 / WHITE_KEYS;
+            const keyAreaLeft = (w - keyWidth * WHITE_KEYS) / 2;
+
+            if (my < keyAreaTop || my > keyAreaBottom) return;
+            const relX = mx - keyAreaLeft;
+            if (relX < 0 || relX > keyWidth * WHITE_KEYS) return;
+
+            const clickedKey = Math.floor(relX / keyWidth);
+            const triggerY = h * TRIGGER_LINE_RATIO;
+
+            // 找最近的未命中音符（触发线±30px内判定）
+            let bestNote = null;
+            let bestDist = Infinity;
+            for (const note of fallingNotes) {
+                if (!note.active || note.hit || note.missed) continue;
+                if (note.keyIndex !== clickedKey) continue;
+                const dist = note.y - triggerY;
+                const absDist = Math.abs(dist);
+                // 允许在触发线上方20px到下方30px范围内
+                if (dist <= 30 && dist >= -20 && absDist < bestDist) {
+                    bestDist = absDist;
+                    bestNote = note;
+                }
+            }
+
+            if (bestNote) {
+                // 正确！
+                bestNote.hit = true;
+                bestNote.active = false;
+                pianoScore++;
+                keyGlows[clickedKey] = { time: 0.4, color: '#FFD700' };
+                playPianoNote(bestNote.noteName, 0.5, 0.3);
+                pianoScoreEl.textContent = `✦ ${pianoScore} / ${melodyNotes.length}`;
+
+                // 首次命中后隐藏提示
+                const hintEl2 = document.getElementById('piano-hint');
+                if (hintEl2 && pianoScore === 1) {
+                    hintEl2.style.opacity = '0';
+                }
+
+                // 检查是否完成
+                checkPianoComplete();
+            } else {
+                // 检查该轨道是否还有未处理的光点，没有则不判错（避免延迟/重复点击误判）
+                const hasActiveOnTrack = fallingNotes.some(n => n.active && !n.hit && !n.missed && n.keyIndex === clickedKey);
+                if (hasActiveOnTrack) {
+                    // 错误：按错键（该轨道有活跃光点但不在判定范围内）
+                    pianoMistakes++;
+                    keyGlows[clickedKey] = { time: 0.3, color: '#FF4444' };
+                    keyShakes[clickedKey] = 0.3;
+                    playWrongNoteSound();
+                    pianoMistakesEl.textContent = `错误: ${'✖'.repeat(pianoMistakes)}`;
+
+                    // 把该轨道最近的活跃光点标记掉，避免走到底部重复判错
+                    let closestNote = null;
+                    let closestDist = Infinity;
+                    for (const note of fallingNotes) {
+                        if (!note.active || note.hit || note.missed) continue;
+                        if (note.keyIndex !== clickedKey) continue;
+                        const d = Math.abs(note.y - triggerY);
+                        if (d < closestDist) { closestDist = d; closestNote = note; }
+                    }
+                    if (closestNote) {
+                        closestNote.missed = true;
+                        closestNote.active = false;
+                    }
+
+                    checkPianoFail();
+                    checkPianoComplete();
+                }
+            }
+        }
+
+        // 检查是否完成
+        function checkPianoComplete() {
+            const allDone = fallingNotes.every(n => n.hit || n.missed);
+            if (allDone && pianoMistakes < pianoMaxMistakes) {
+                endPianoGame('win');
+            }
+        }
+
+        // 检查是否失败
+        function checkPianoFail() {
+            if (pianoMistakes >= pianoMaxMistakes) {
+                endPianoGame('lose');
+            }
+        }
+
+        // 结束游戏
+        function endPianoGame(result) {
+            pianoGameOver = true;
+            pianoGameResult = result;
+            pianoResultEl.style.display = 'block';
+
+            if (result === 'win') {
+                pianoResultText.innerHTML = '…主人教我的第一首曲子，<br>我还记得。';
+                playVictoryMelody();
+                makePianoGlow(true);
+                // 只有胜利才永久锁定
+                if (!pianoInteracted) {
+                    pianoInteracted = true;
+                    localStorage.setItem('pianoInteracted', 'true');
+                }
+            } else {
+                pianoResultText.innerHTML = '…有些旋律，<br>再也接不上了。';
+                makePianoGlow(false);
+                // 失败不锁定，可以重试
+            }
+
+            // 点击任意位置返回
+            const exitHandler = () => {
+                exitPianoGame();
+                pianoOverlay.removeEventListener('click', exitHandler);
+                document.removeEventListener('keydown', exitHandler);
+            };
+            setTimeout(() => {
+                pianoOverlay.addEventListener('click', exitHandler);
+                document.addEventListener('keydown', exitHandler);
+            }, 500);
+        }
+
+        // 让3D场景中钢琴模型发光/变暗
+        function makePianoGlow(success) {
+            scene.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    const matName = child.material.name || '';
+                    // OBJ加载的材质可能带"_0"后缀
+                    if (matName && (matName === 'gangqing' || matName === 'gangqing2' || matName.startsWith('gangqing'))) {
+                        if (success) {
+                            child.material = child.material.clone();
+                            child.material.emissive = new THREE.Color(0xFFD700);
+                            child.material.emissiveIntensity = 0.8;
+                        } else {
+                            child.material = child.material.clone();
+                            child.material.emissive = new THREE.Color(0x222222);
+                            child.material.emissiveIntensity = 0.1;
+                        }
+                    }
+                }
+            });
+        }
+
+        // 更新音符
+        function updateFallingNotes(dt) {
+            if (pianoGameOver) return;
+            const h = pianoCanvas.height;
+            const triggerY = h * TRIGGER_LINE_RATIO;
+
+            for (const note of fallingNotes) {
+                if (!note.active || note.hit) continue;
+                note.y += FALL_SPEED * dt;
+
+                // 超出底部
+                if (note.y > h + 50 && !note.missed) {
+                    note.missed = true;
+                    note.active = false;
+                    pianoMistakes++;
+                    keyGlows[note.keyIndex] = { time: 0.3, color: '#FF4444' };
+                    playWrongNoteSound();
+                    pianoMistakesEl.textContent = `错误: ${'✖'.repeat(pianoMistakes)}`;
+                    checkPianoFail();
+                    checkPianoComplete();
+                }
+            }
+
+            // 更新特效计时器
+            const deltaTime = dt;
+            for (const k in keyGlows) {
+                keyGlows[k].time -= deltaTime;
+                if (keyGlows[k].time <= 0) delete keyGlows[k];
+            }
+            for (const k in keyShakes) {
+                keyShakes[k] -= deltaTime;
+                if (keyShakes[k] <= 0) delete keyShakes[k];
+            }
+        }
+
+        // 渲染
+        function renderPianoGame() {
+            const w = pianoCanvas.width;
+            const h = pianoCanvas.height;
+            const ctx = pianoCtx;
+
+            ctx.clearRect(0, 0, w, h);
+
+            // 背景渐变
+            const bgGrad = ctx.createRadialGradient(w / 2, h * 0.4, 50, w / 2, h * 0.4, Math.max(w, h));
+            bgGrad.addColorStop(0, '#1a1a2e');
+            bgGrad.addColorStop(1, '#0a0a15');
+            ctx.fillStyle = bgGrad;
+            ctx.fillRect(0, 0, w, h);
+
+            // 粒子背景
+            const particleCount = 60;
+            for (let i = 0; i < particleCount; i++) {
+                const px = (Math.sin(i * 73.7 + performance.now() * 0.0003 + i) * 0.5 + 0.5) * w;
+                const py = (Math.cos(i * 47.3 + performance.now() * 0.0005 + i) * 0.5 + 0.5) * h;
+                ctx.fillStyle = `rgba(255, 255, 255, ${0.03 + Math.sin(performance.now() * 0.002 + i) * 0.02})`;
+                ctx.beginPath();
+                ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 触发线
+            const triggerY = h * TRIGGER_LINE_RATIO;
+            ctx.strokeStyle = 'rgba(255, 215, 0, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.beginPath();
+            ctx.moveTo(0, triggerY);
+            ctx.lineTo(w, triggerY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 轨道区域
+            const keyAreaTop = h * 0.40;
+            const keyAreaBottom = h * 0.80;
+            const keyWidth = w * 0.85 / WHITE_KEYS;
+            const keyAreaLeft = (w - keyWidth * WHITE_KEYS) / 2;
+
+            // 轨道竖线
+            for (let i = 0; i <= WHITE_KEYS; i++) {
+                const x = keyAreaLeft + i * keyWidth;
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, keyAreaTop);
+                ctx.stroke();
+            }
+
+            // 琴键（先绘制，在光点后面）
+            const keyHeight = keyAreaBottom - keyAreaTop;
+            for (let i = 0; i < WHITE_KEYS; i++) {
+                const kx = keyAreaLeft + i * keyWidth;
+                const ky = keyAreaTop;
+
+                // 琴键主体
+                let keyColor;
+                let shakeOffsetX = 0;
+                if (keyGlows[i]) {
+                    const glowAlpha = Math.min(1, keyGlows[i].time / 0.3);
+                    keyColor = keyGlows[i].color === '#FFD700'
+                        ? `rgba(255, 215, 0, ${0.3 + glowAlpha * 0.7})`
+                        : `rgba(255, 68, 68, ${0.3 + glowAlpha * 0.7})`;
+                } else {
+                    keyColor = 'rgba(255, 255, 255, 0.95)';
+                }
+
+                if (keyShakes[i] && keyShakes[i] > 0) {
+                    shakeOffsetX = Math.sin(performance.now() * 0.05) * 4 * (keyShakes[i] / 0.3);
+                }
+
+                // 琴键阴影
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                ctx.fillRect(kx + 2 + shakeOffsetX, ky + 3, keyWidth - 2, keyHeight - 2);
+
+                // 琴键主体
+                const keyGrad = ctx.createLinearGradient(kx, ky, kx, ky + keyHeight);
+                if (keyGlows[i]) {
+                    const glowColor = keyGlows[i].color === '#FFD700'
+                        ? ['rgba(255,240,200,1)', 'rgba(255,220,150,1)', 'rgba(255,200,100,0.95)']
+                        : ['rgba(255,200,200,1)', 'rgba(255,120,120,1)', 'rgba(200,80,80,0.95)'];
+                    keyGrad.addColorStop(0, glowColor[0]);
+                    keyGrad.addColorStop(0.5, glowColor[1]);
+                    keyGrad.addColorStop(1, glowColor[2]);
+                } else {
+                    keyGrad.addColorStop(0, '#FFFFFF');
+                    keyGrad.addColorStop(0.5, '#F5F5F5');
+                    keyGrad.addColorStop(1, '#E0E0E0');
+                }
+                ctx.fillStyle = keyGrad;
+                roundRect(ctx, kx + 1 + shakeOffsetX, ky, keyWidth - 2, keyHeight, 6);
+                ctx.fill();
+
+                // 琴键边框
+                ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+                ctx.lineWidth = 1;
+                roundRect(ctx, kx + 1 + shakeOffsetX, ky, keyWidth - 2, keyHeight, 6);
+                ctx.stroke();
+
+                // 黑键分隔线
+                if (i < WHITE_KEYS - 1 && i !== 2 && i !== 6) {
+                    const sepX = kx + keyWidth + shakeOffsetX;
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+                    ctx.fillRect(sepX - 1, ky, 2, keyHeight * 0.6);
+                }
+
+                // 键名标注
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.font = `${Math.min(16, keyWidth * 0.55)}px 'Microsoft YaHei', sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(keyNames[i], kx + keyWidth / 2 + shakeOffsetX, ky + keyHeight - 10);
+            }
+
+            // 触发线高亮区域（在光点之下）
+            const hlGrad = ctx.createLinearGradient(0, triggerY - 15, 0, triggerY + 15);
+            hlGrad.addColorStop(0, 'rgba(255, 215, 0, 0)');
+            hlGrad.addColorStop(0.5, 'rgba(255, 215, 0, 0.06)');
+            hlGrad.addColorStop(1, 'rgba(255, 215, 0, 0)');
+            ctx.fillStyle = hlGrad;
+            ctx.fillRect(0, triggerY - 15, w, 30);
+
+            // 下落音符光点（最上层，在琴键和触发线之上）
+            for (const note of fallingNotes) {
+                if (!note.active || note.hit) continue;
+                const noteX = keyAreaLeft + note.keyIndex * keyWidth + keyWidth / 2;
+                const noteY = note.y;
+
+                // 光晕
+                const glowGrad = ctx.createRadialGradient(noteX, noteY, 4, noteX, noteY, 22);
+                glowGrad.addColorStop(0, 'rgba(255, 220, 100, 0.9)');
+                glowGrad.addColorStop(0.3, 'rgba(255, 200, 60, 0.5)');
+                glowGrad.addColorStop(0.7, 'rgba(255, 150, 30, 0.1)');
+                glowGrad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+                ctx.fillStyle = glowGrad;
+                ctx.beginPath();
+                ctx.arc(noteX, noteY, 22, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 主光点
+                const mainGrad = ctx.createRadialGradient(noteX - 2, noteY - 2, 2, noteX, noteY, 10);
+                mainGrad.addColorStop(0, '#FFFFFF');
+                mainGrad.addColorStop(0.4, '#FFE066');
+                mainGrad.addColorStop(1, '#FF8C00');
+                ctx.fillStyle = mainGrad;
+                ctx.beginPath();
+                ctx.arc(noteX, noteY, 10, 0, Math.PI * 2);
+                ctx.fill();
+
+                // 尾巴
+                const tailGrad = ctx.createLinearGradient(noteX, noteY, noteX, noteY - 40);
+                tailGrad.addColorStop(0, 'rgba(255, 200, 60, 0.6)');
+                tailGrad.addColorStop(1, 'rgba(255, 200, 60, 0)');
+                ctx.fillStyle = tailGrad;
+                ctx.beginPath();
+                ctx.moveTo(noteX - 4, noteY);
+                ctx.lineTo(noteX + 4, noteY);
+                ctx.lineTo(noteX + 2, noteY - 40);
+                ctx.lineTo(noteX - 2, noteY - 40);
+                ctx.fill();
+            }
+
+            // 游戏结束遮罩
+            if (pianoGameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, w, h);
+            }
+        }
+
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+            ctx.lineTo(x + r, y + h);
+            ctx.arcTo(x, y + h, x, y + h - r, r);
+            ctx.lineTo(x, y + r);
+            ctx.arcTo(x, y, x + r, y, r);
+            ctx.closePath();
+        }
+
+        function pianoGameLoop(timestamp) {
+            if (!pianoGameActive) return;
+
+            const dt = Math.min((timestamp - pianoLastTime) / 1000, 0.05);
+            pianoLastTime = timestamp;
+
+            updateFallingNotes(dt);
+            renderPianoGame();
+
+            pianoAnimId = requestAnimationFrame(pianoGameLoop);
+        }
+
+        // Canvas点击事件
+        pianoCanvas.addEventListener('click', (e) => {
+            if (pianoGameOver) return;
+            const rect = pianoCanvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            handlePianoClick(mx, my);
+        });
+
+        // 窗口大小变化
+        window.addEventListener('resize', () => {
+            if (pianoGameActive) resizePianoCanvas();
+        });
+
+        // 触发钢琴游戏
+        function triggerPianoGame() {
+            if (pianoGameActive) return;
+            // 如果之前已经成功玩过，仍然可以再次进入
+            initPianoGame();
+        }
+
+        function checkInteraction() {
+            const playerPos = bulldogGroup.position;
+            let closestDist = Infinity, closestItem = null;
+
+            // 检查病历
+            if (!medicalRecordInteracted) {
+                var medDist = playerPos.distanceTo(medicalPos);
+                if (medDist < 2.0 && medDist < closestDist) {
+                    closestDist = medDist;
+                    closestItem = {
+                        id: 'medical',
+                        name: '病历',
+                        action: function() { triggerMedicalFlashback(); }
+                    };
+                }
+            }
+
+            // 检查狗绳
+            if (!leashInteracted) {
+                const leashDist = playerPos.distanceTo(leashWorldPos);
+                if (leashDist < 0.8 && leashDist < closestDist) {
+                    closestDist = leashDist;
+                    closestItem = {
+                        id: 'leash',
+                        name: '狗绳',
+                        action: () => triggerLeashFlashback()
+                    };
+                }
+            }
+
+            // 检查游泳圈（卫生间）
+            const swimRingDist = playerPos.distanceTo(swimRingWorldPos);
+            if (swimRingDist < 1.0 && swimRingDist < closestDist) {
+                closestDist = swimRingDist;
+                closestItem = {
+                    id: 'swimring',
+                    name: '游泳圈',
+                    action: () => { window.location.href = 'swim_game.html'; }
+                };
+            }
+
+            // 检查项圈（最高优先级，Y轴范围加大：仅XZ平面距离）
+            if (!collarInteracted) {
+                const dx = playerPos.x - collarWorldPos.x;
+                const dz = playerPos.z - collarWorldPos.z;
+                const collarDist = Math.sqrt(dx * dx + dz * dz);
+                if (collarDist < 0.8) {
+                    closestDist = collarDist;
+                    closestItem = {
+                        id: 'collar',
+                        name: '项圈',
+                        action: () => triggerCollarInteraction()
+                    };
+                }
+            }
+
+            // 检查钢琴
+            if (!pianoInteracted && !pianoGameActive) {
+                const pianoDist = playerPos.distanceTo(pianoWorldPos);
+                if (pianoDist < 0.8 && pianoDist < closestDist) {
+                    closestDist = pianoDist;
+                    closestItem = {
+                        id: 'piano',
+                        name: '钢琴',
+                        action: () => triggerPianoGame()
+                    };
+                }
+            }
+
+            // 检查遥控器（叼取序列，不可重复）
+            if (!remoteInteracted && !remoteSeqLocked) {
+                const remoteDist = playerPos.distanceTo(remoteWorldPos);
+                if (remoteDist < 0.8 && remoteDist < closestDist) {
+                    closestDist = remoteDist;
+                    closestItem = {
+                        id: 'remote',
+                        name: '遥控器',
+                        action: () => startRemoteSequence()
+                    };
+                }
+            }
+
+            // 检查玩具球
+            if (!toyBallInteracted) {
+                const ballDist = playerPos.distanceTo(toyBallWorldPos);
+                if (ballDist < 0.6) {
+                    closestDist = ballDist;
+                    closestItem = {
+                        id: 'toyball',
+                        name: '玩具球',
+                        action: () => triggerBallFlashback()
+                    };
+                }
+            }
+
+            // 检查狗粮碗
+            if (!dogBowlInteracted) {
+                const bowlDist = playerPos.distanceTo(dogBowlWorldPos);
+                if (bowlDist < 1.0 && bowlDist < closestDist) {
+                    closestDist = bowlDist;
+                    closestItem = {
+                        id: 'dogbowl',
+                        name: '狗粮碗',
+                        action: () => triggerFlashback()
+                    };
+                }
+            }
+
+            if (closestItem) {
+                hintEl.textContent = `按 E 键 与 ${closestItem.name} 互动`;
+                hintEl.classList.add('visible');
+                return closestItem;
+            } else {
+                hintEl.classList.remove('visible');
+                return null;
+            }
+        }
+
+        // ==================== 重新开始按钮 ====================
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            localStorage.clear();
+            location.reload();
+        });
+
+        // 每帧自动检测提示（不依赖按键）
+        let currentClosestItem = null;
+        function updateInteractionHints() {
+            if (pianoGameActive) return;
+            currentClosestItem = checkInteraction();
+        }
+
+        // ==================== 第三人称控制 ====================
+        const keyState = { w: false, a: false, s: false, d: false, space: false };
+        const moveSpeed = 2.0;
+        const playerDir = new THREE.Vector3();
+
+        // ==================== 跳跃系统 ====================
+        let velocityY = 0;
+        const gravity = -12;
+        const jumpForce = 4.5;
+        const groundY = 0;      // 地面高度
+        let isOnGround = true;
+
+        let cameraYaw = Math.PI;
+        let cameraPitch = 0.55;
+        let cameraDistance = 3.5;
+        const minDist = 2.0;
+        const maxDist = 3.5;
+        const mouseSensitivity = 0.004;
+        let isMouseDown = false;
+        let isRightDown = false;
+
+        let smoothYaw = cameraYaw;
+        let smoothPitch = cameraPitch;
+        let smoothDist = cameraDistance;
+        const smoothFactor = 0.12;
+
+        let lastMouseX = 0, lastMouseY = 0;
+        renderer.domElement.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                isMouseDown = true;
+                lastMouseX = e.pageX;
+                lastMouseY = e.pageY;
+            }
+            if (e.button === 2) {
+                isRightDown = true;
+                lastMouseX = e.pageX;
+                lastMouseY = e.pageY;
+            }
+        });
+        renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+        window.addEventListener('mouseup', () => { isMouseDown = false; isRightDown = false; });
+        window.addEventListener('mousemove', (e) => {
+            if (!isMouseDown && !isRightDown) return;
+            const dx = e.pageX - lastMouseX;
+            const dy = e.pageY - lastMouseY;
+            lastMouseX = e.pageX;
+            lastMouseY = e.pageY;
+
+            if (isMouseDown) {
+                cameraYaw -= dx * mouseSensitivity;
+                cameraPitch -= dy * mouseSensitivity;
+                cameraPitch = Math.max(0.15, Math.min(Math.PI / 2 - 0.1, cameraPitch));
+            }
+            if (isRightDown) {
+                cameraDistance += dy * 0.01;
+                cameraDistance = Math.max(minDist, Math.min(maxDist, cameraDistance));
+            }
+        });
+
+        renderer.domElement.addEventListener('wheel', (e) => {
+            cameraDistance += e.deltaY * 0.01;
+            cameraDistance = Math.max(minDist, Math.min(maxDist, cameraDistance));
+            e.preventDefault();
+        }, { passive: false });
+
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isMouseDown = true;
+                lastMouseX = e.touches[0].pageX;
+                lastMouseY = e.touches[0].pageY;
+            }
+            if (e.touches.length === 2) {
+                isMouseDown = false;
+                const dx = e.touches[0].pageX - e.touches[1].pageX;
+                const dy = e.touches[0].pageY - e.touches[1].pageY;
+                lastMouseX = Math.sqrt(dx * dx + dy * dy);
+            }
+        });
+        window.addEventListener('touchend', () => { isMouseDown = false; });
+        window.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 1 && isMouseDown) {
+                const dx = e.touches[0].pageX - lastMouseX;
+                const dy = e.touches[0].pageY - lastMouseY;
+                lastMouseX = e.touches[0].pageX;
+                lastMouseY = e.touches[0].pageY;
+                cameraYaw -= dx * mouseSensitivity;
+                cameraPitch -= dy * mouseSensitivity;
+                cameraPitch = Math.max(0.15, Math.min(Math.PI / 2 - 0.1, cameraPitch));
+            }
+            if (e.touches.length === 2) {
+                const dx = e.touches[0].pageX - e.touches[1].pageX;
+                const dy = e.touches[0].pageY - e.touches[1].pageY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                cameraDistance -= (dist - lastMouseX) * 0.02;
+                cameraDistance = Math.max(minDist, Math.min(maxDist, cameraDistance));
+                lastMouseX = dist;
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            // 遥控器叼取序列中屏蔽所有按键
+            if (remoteSeqLocked) return;
+            // 项圈选择面板或视频播放中屏蔽所有游戏按键
+            if (collarChoiceOverlay.style.display === 'flex' || collarVideoOverlay.style.display === 'block') {
+                return;
+            }
+            // 钢琴游戏中屏蔽移动键和E键
+            if (pianoGameActive) {
+                if (e.code === 'KeyE') e.preventDefault();
+                return;
+            }
+            switch (e.code) {
+                case 'KeyW': keyState.w = true; e.preventDefault(); break;
+                case 'KeyA': keyState.a = true; e.preventDefault(); break;
+                case 'KeyS': keyState.s = true; e.preventDefault(); break;
+                case 'KeyD': keyState.d = true; e.preventDefault(); break;
+                case 'Space':
+                    if (isOnGround) {
+                        velocityY = jumpForce;
+                        isOnGround = false;
+                    }
+                    e.preventDefault();
+                    break;
+                case 'KeyE':
+                    if (currentClosestItem) currentClosestItem.action();
+                    e.preventDefault();
+                    break;
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW': keyState.w = false; e.preventDefault(); break;
+                case 'KeyA': keyState.a = false; e.preventDefault(); break;
+                case 'KeyS': keyState.s = false; e.preventDefault(); break;
+                case 'KeyD': keyState.d = false; e.preventDefault(); break;
+            }
+        });
+
+        // 检测点 (px, pz) 与某个 collider 是否重叠（含玩家半径）
+        function resolveColliders(px, pz) {
+            let rx = px, rz = pz;
+            for (const c of colliders) {
+                const expandedMinX = c.minX - playerRadius;
+                const expandedMaxX = c.maxX + playerRadius;
+                const expandedMinZ = c.minZ - playerRadius;
+                const expandedMaxZ = c.maxZ + playerRadius;
+
+                if (rx > expandedMinX && rx < expandedMaxX &&
+                    rz > expandedMinZ && rz < expandedMaxZ) {
+                    // 计算从哪个轴推出穿透量最小
+                    const overlapLeft  = rx - expandedMinX;
+                    const overlapRight = expandedMaxX - rx;
+                    const overlapFront = rz - expandedMinZ;
+                    const overlapBack  = expandedMaxZ - rz;
+                    const minOverlap = Math.min(overlapLeft, overlapRight, overlapFront, overlapBack);
+
+                    if (minOverlap === overlapLeft)       rx = expandedMinX;
+                    else if (minOverlap === overlapRight) rx = expandedMaxX;
+                    else if (minOverlap === overlapFront) rz = expandedMinZ;
+                    else                                  rz = expandedMaxZ;
+                }
+            }
+            return { x: rx, z: rz };
+        }
+
+        function updateMovement(dt) {
+            // 项圈面板或钢琴游戏中停止移动
+            if (pianoGameActive || collarChoiceOverlay.style.display === 'flex' || collarVideoOverlay.style.display === 'block') return;
+
+            const forward = new THREE.Vector3(-Math.sin(cameraYaw), 0, -Math.cos(cameraYaw)).normalize();
+            const right = new THREE.Vector3(Math.cos(cameraYaw), 0, -Math.sin(cameraYaw)).normalize();
+
+            playerDir.set(0, 0, 0);
+            if (keyState.w) playerDir.add(forward);
+            if (keyState.s) playerDir.sub(forward);
+            if (keyState.a) playerDir.sub(right);
+            if (keyState.d) playerDir.add(right);
+
+            if (playerDir.length() > 0) {
+                playerDir.normalize();
+                const move = playerDir.clone().multiplyScalar(moveSpeed * dt);
+
+                // 先分轴移动，再各自做碰撞解算（防止角落卡死）
+                let newX = bulldogGroup.position.x + move.x;
+                let newZ = bulldogGroup.position.z + move.z;
+
+                // 世界边界（四面外墙内侧）
+                newX = Math.max(-4.2, Math.min(4.2, newX));
+                newZ = Math.max(-4.2, Math.min(4.2, newZ));
+
+                // 碰撞解算：先只移动 X 轴
+                const afterX = resolveColliders(newX, bulldogGroup.position.z);
+                newX = afterX.x;
+                // 再只移动 Z 轴
+                const afterZ = resolveColliders(newX, newZ);
+                newZ = afterZ.z;
+
+                bulldogGroup.position.x = newX;
+                bulldogGroup.position.z = newZ;
+
+                const targetAngle = Math.atan2(move.x, move.z);
+                let angleDiff = targetAngle - bulldogGroup.rotation.y;
+                while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+                bulldogGroup.rotation.y += angleDiff * Math.min(1, dt * 8);
+            }
+
+            // ---- 卫生间区域自动抬升（走到碰撞体上自动站到0.2m高）----
+            const BATHROOM_RISE_Y = 0.2;
+            const bathroomCX = 2.5, bathroomCZ = 1.65, bathroomHW = 1.5, bathroomHD = 1.5;
+            const inBathroomArea = bulldogGroup.position.x >= bathroomCX - bathroomHW - playerRadius &&
+                                     bulldogGroup.position.x <= bathroomCX + bathroomHW + playerRadius &&
+                                     bulldogGroup.position.z >= bathroomCZ - bathroomHD - playerRadius &&
+                                     bulldogGroup.position.z <= bathroomCZ + bathroomHD + playerRadius;
+
+            // ---- 跳跃 / 重力 / 平台 ----
+            const prevY = bulldogGroup.position.y;
+            velocityY += gravity * dt;
+            bulldogGroup.position.y += velocityY * dt;
+            const curY = bulldogGroup.position.y;
+
+            const px = bulldogGroup.position.x;
+            const pz = bulldogGroup.position.z;
+            let landedPlatformY = -Infinity;
+
+            for (const c of colliders) {
+                if (c.platformTop > -Infinity && c.platformTop >= groundY) {
+                    if (px >= c.minX - playerRadius && px <= c.maxX + playerRadius &&
+                        pz >= c.minZ - playerRadius && pz <= c.maxZ + playerRadius) {
+                        if (prevY >= c.platformTop && curY <= c.platformTop) {
+                            landedPlatformY = Math.max(landedPlatformY, c.platformTop);
+                        }
+                    }
+                }
+            }
+
+            if (landedPlatformY > -Infinity) {
+                if (!isOnGround) playLandSound();
+                bulldogGroup.position.y = landedPlatformY;
+                velocityY = 0;
+                isOnGround = true;
+            } else if (inBathroomArea && bulldogGroup.position.y < BATHROOM_RISE_Y) {
+                if (!isOnGround) playLandSound();
+                bulldogGroup.position.y = BATHROOM_RISE_Y;
+                velocityY = 0;
+                isOnGround = true;
+            } else if (bulldogGroup.position.y <= groundY) {
+                if (!isOnGround) playLandSound();
+                bulldogGroup.position.y = groundY;
+                velocityY = 0;
+                isOnGround = true;
+            } else {
+                isOnGround = false;
+            }
+        }
+
+        function updateCamera() {
+            smoothYaw += (cameraYaw - smoothYaw) * smoothFactor;
+            smoothPitch += (cameraPitch - smoothPitch) * smoothFactor;
+            smoothDist += (cameraDistance - smoothDist) * smoothFactor;
+
+            const target = new THREE.Vector3(
+                bulldogGroup.position.x,
+                bulldogGroup.position.y + 0.35,
+                bulldogGroup.position.z
+            );
+
+            let camX = target.x + smoothDist * Math.sin(smoothYaw) * Math.cos(smoothPitch);
+            let camY = target.y + smoothDist * Math.sin(smoothPitch);
+            let camZ = target.z + smoothDist * Math.cos(smoothYaw) * Math.cos(smoothPitch);
+
+            camX = Math.max(-4.0, Math.min(4.0, camX));
+            camZ = Math.max(-4.0, Math.min(4.0, camZ));
+            camY = Math.max(0.3, Math.min(4.0, camY)); // 上限提高以跟随跳跃
+
+            camera.position.set(camX, camY, camZ);
+            camera.lookAt(target);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // ==================== 动画循环 ====================
+        const clock = new THREE.Clock();
+        let walkCycle = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(clock.getDelta(), 0.1);
+
+            if (remoteSeqLocked) {
+                // 序列控制期间跳过手动移动
+                updateRemoteSequence(dt);
+            } else {
+                updateMovement(dt);
+            }
+            updateCamera();
+            updateInteractionHints();
+
+            // 实时位置显示
+            const posEl = document.getElementById('pos-display');
+            if (posEl) {
+                const p = bulldogGroup.position;
+                posEl.textContent = `X: ${p.x.toFixed(2)}  Z: ${p.z.toFixed(2)}  Y: ${p.y.toFixed(2)}`;
+            }
+
+            const time = Date.now() * 0.001;
+            const isMoving = keyState.w || keyState.a || keyState.s || keyState.d;
+
+            if (bulldogGroup.children.length > 0 && bulldogGroup.children[0]) {
+                const model = bulldogGroup.children[0];
+                const modelBaseY = 0.28; // 模型相对于 bulldogGroup 的基础 Y
+
+                if (!isOnGround) {
+                    // 空中：通过 bulldogGroup 做轻微拉伸，不碰 model.scale
+                    model.position.y = modelBaseY;
+                    model.rotation.x = 0;
+                    model.rotation.z = 0;
+                    const stretchY = velocityY > 0 ? 1.08 : 0.92;
+                    bulldogGroup.scale.set(1 / stretchY, stretchY, 1 / stretchY);
+                } else if (isMoving) {
+                    const prevSin = Math.sin(walkCycle);
+                    walkCycle += dt * 8;
+                    const curSin = Math.sin(walkCycle);
+                    // 正弦波过零点触发脚步声
+                    if ((prevSin <= 0 && curSin > 0) || (prevSin >= 0 && curSin < 0)) {
+                        playFootstep();
+                    }
+                    const bounce = Math.abs(curSin) * 0.03;
+                    model.position.y = modelBaseY + bounce;
+                    bulldogGroup.scale.set(1, 1, 1);
+                    model.rotation.x = curSin * 0.08;
+                    model.rotation.z = Math.sin(walkCycle * 2) * 0.04;
+                } else {
+                    model.position.y += (modelBaseY - model.position.y) * 0.1;
+                    model.rotation.x += (0 - model.rotation.x) * 0.1;
+                    model.rotation.z += (0 - model.rotation.z) * 0.1;
+                    walkCycle = 0;
+                    const breathe = 1 + Math.sin(time * 3) * 0.015;
+                    bulldogGroup.scale.set(breathe, breathe, breathe);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        console.log('🐶 小八的家已加载！第三人称视角 | WASD移动 | 鼠标拖动旋转 | 滚轮缩放 | E键互动');
+    </script>
+</body>
+</html>

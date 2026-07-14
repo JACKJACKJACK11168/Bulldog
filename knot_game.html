@@ -8,10 +8,13 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#1a0f0a;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:"Comic Sans MS","YouYuan",cursive,sans-serif}
 canvas{display:block;cursor:pointer;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,0.6)}
+#skipBtn{position:absolute;bottom:10px;right:10px;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.2);padding:4px 12px;border-radius:15px;font-size:11px;cursor:pointer;z-index:10;font-family:inherit}
+#skipBtn:hover{background:rgba(255,255,255,0.25);color:#fff}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<button id="skipBtn" onclick="skipGame()">跳过 ⏭</button>
 <script>
 (function(){
 const c=document.getElementById('c');
@@ -96,6 +99,7 @@ function init(){
     pulseFX=[];ropeFlash=0;straightenT=0;winAnimT=0;ropeBreakT=0;
 }
 init();
+window.skipGame=function(){knots.forEach(function(k){k.solved=true;k.points.forEach(function(p){p.solved=true;});});gameState='win';winAnimT=0;};
 
 // ── 输入 ──
 c.addEventListener('mousemove',e=>{
@@ -224,17 +228,23 @@ function flashError(knot,idx){
 
 // 结局点击
 document.addEventListener('click',function(e){
-    if(gameState==='win'||gameState==='lose'){
-        if(winAnimT>1.5||(gameState==='lose'&&ropeBreakT>1.5)){
-            window.location.href='index.html';
-        }
+    if(gameState==='win'&&winAnimT>1.5){
+        var ret=localStorage.getItem('knotGameReturn')||'index.html';
+        localStorage.removeItem('knotGameReturn');
+        window.location.href=ret;
+    }
+    if(gameState==='lose'&&ropeBreakT>1.5){
+        location.reload();
     }
 });
 document.addEventListener('touchend',function(e){
-    if(gameState==='win'||gameState==='lose'){
-        if(winAnimT>1.5||(gameState==='lose'&&ropeBreakT>1.5)){
-            window.location.href='index.html';
-        }
+    if(gameState==='win'&&winAnimT>1.5){
+        var ret=localStorage.getItem('knotGameReturn')||'index.html';
+        localStorage.removeItem('knotGameReturn');
+        window.location.href=ret;
+    }
+    if(gameState==='lose'&&ropeBreakT>1.5){
+        location.reload();
     }
 });
 
@@ -472,7 +482,7 @@ function draw(){
         ctx.fillStyle='#EF5350';ctx.font='bold 26px "Comic Sans MS","YouYuan",sans-serif';
         ctx.textAlign='center';ctx.fillText('……太旧了，一扯就断了。',W/2,H/2-10);
         ctx.fillStyle='#DDD';ctx.font='14px "Comic Sans MS","YouYuan",sans-serif';
-        ctx.fillText('按任意位置返回',W/2,H/2+25);
+        ctx.fillText('按任意位置重试',W/2,H/2+25);
     }
 }
 

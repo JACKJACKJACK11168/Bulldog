@@ -6,6 +6,32 @@
     <title>第二章 - 第三人称</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: "Microsoft YaHei", sans-serif; }
+
+        /* ====== 游戏结尾页面 ====== */
+        #end-screen {
+            position: fixed;inset:0;z-index:30000;display:flex;align-items:center;justify-content:center;
+            color:#fff2c7;background:rgba(10,6,3,0.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+            transition:opacity 1s ease;
+        }
+        #end-screen::before {
+            content:"";position:absolute;inset:0;
+            background:radial-gradient(circle at center,transparent 0%,rgba(8,4,2,0.5) 100%);
+            pointer-events:none;
+        }
+        .end-content {position:relative;width:min(90vw,760px);text-align:center;}
+        .end-title {
+            margin:0;color:#fff0bd;font-size:clamp(48px,6.5vw,96px);font-weight:900;line-height:1.2;
+            text-shadow:0 4px 0 rgba(91,53,20,0.6),0 8px 24px rgba(0,0,0,0.6),0 0 20px rgba(255,222,144,0.2);
+        }
+        .end-subtitle {
+            margin:40px 0;color:#ffefc6;font-size:clamp(16px,1.6vw,24px);letter-spacing:0.15em;line-height:1.8;
+            text-shadow:0 3px 10px rgba(0,0,0,0.8);
+        }
+        .end-thanks {
+            margin:50px 0 30px;color:rgba(255,239,197,0.8);font-size:clamp(14px,1.2vw,18px);letter-spacing:0.1em;
+            text-shadow:0 2px 6px #000;
+        }
+        .end-fade {opacity:0 !important;}
         #info {
             position: absolute;
             top: 20px;
@@ -125,7 +151,9 @@
     <div id="controls-hint">WASD 移动 · 空格 跳跃 · 鼠标拖动视角 · 滚轮缩放</div>
     <div id="pos-display" style="position:absolute;top:20px;right:20px;background:rgba(0,0,0,0.7);color:#0f0;padding:8px 14px;border-radius:6px;font-size:13px;font-family:monospace;pointer-events:none;z-index:100;"></div>
     <button id="reset-btn" style="position:absolute;bottom:30px;left:30px;background:rgba(0,0,0,0.6);color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;z-index:100;">🔄 重新开始</button>
-
+    <div id="owner-progress" style="position:absolute;top:20px;left:20px;background:rgba(0,0,0,0.65);color:#FFD700;padding:8px 14px;border-radius:6px;font-size:14px;font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;pointer-events:none;z-index:100;display:none;">收拾进度：0/7</div>
+    <div id="owner-narrative" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#FFE4B5;font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.5vw,26px);text-align:center;pointer-events:none;z-index:9998;opacity:0;transition:opacity 1s;text-shadow:0 0 12px rgba(255,228,181,0.6);max-width:80vw;line-height:1.6;"></div>
+    
     <!-- 闪回效果叠加层 -->
     <div id="flashback-overlay">
         <div class="blur-layer"></div>
@@ -313,13 +341,8 @@
                 maxZ: cz + halfD,
                 platformTop: isPlatform ? boxY + boxH / 2 : -Infinity  // 平台顶部高度
             });
-            if (showBox) {
-                const boxGeo = new THREE.BoxGeometry(halfW * 2, boxH, halfD * 2);
-                const boxMat = new THREE.MeshBasicMaterial({ color: isPlatform ? 0x44ff44 : 0xff4444, transparent: true, opacity: 0.3, wireframe: true });
-                const box = new THREE.Mesh(boxGeo, boxMat);
-                box.position.set(cx, boxY, cz);
-                scene.add(box);
-            }
+            // 碰撞盒可视化已禁用
+            // if (showBox) { ... }
         }
 
         function addWall(x, z, w, d) {
@@ -387,15 +410,7 @@
         const dogAreaCZ = -3.0;     // 再向-z移0.2
         addCollider(dogAreaCX, dogAreaCZ, 0.55, 0.35, true, 0.4, 0.175);
 
-        // 卫生间抬升区域：3m×3m×0.2m（仅可视化+抬升用，不阻挡移动）
-        (function() {
-            const cx = 2.5, cz = 1.65, hw = 1.5, hd = 1.5;
-            const boxGeo = new THREE.BoxGeometry(hw * 2, 0.2, hd * 2);
-            const boxMat = new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.25, wireframe: true });
-            const box = new THREE.Mesh(boxGeo, boxMat);
-            box.position.set(cx, 0.1, cz); // 顶面在0.2m
-            scene.add(box);
-        })();
+        // 卫生间抬升区域已隐藏碰撞盒可视化
 
         // 卫生间+Z侧后半区碰撞体积（Z从中点到最大值之间的一半）
         addCollider(2.5, 2.775, 1.5, 0.375, true, 1.6, 1.0);
@@ -454,8 +469,8 @@
                                 // 如果之前互动过，恢复发光
                                 if (localStorage.getItem('toyBallInteracted') === 'true') {
                                     toyBallMesh.material = toyBallMesh.material.clone();
-                                    toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
-                                    toyBallMesh.material.emissiveIntensity = 0.5;
+                                    // 发光已禁用: toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
+                                    // 发光已禁用: toyBallMesh.material.emissiveIntensity = 0.5;
                                 }
                                 console.log('🏀 玩具球已找到！', child.name);
                             }
@@ -464,8 +479,8 @@
                                 const mn = child.material.name;
                                 if ((mn === 'gangqing' || mn === 'gangqing2' || mn.startsWith('gangqing')) && localStorage.getItem('pianoInteracted') === 'true') {
                                     child.material = child.material.clone();
-                                    child.material.emissive = new THREE.Color(0xFFD700);
-                                    child.material.emissiveIntensity = 0.8;
+                                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFD700);
+                                    // 发光已禁用: child.material.emissiveIntensity = 0.8;
                                     console.log('🎹 钢琴发光已恢复！', mn);
                                 }
                             }
@@ -566,6 +581,9 @@
         }
         setTimeout(findGreenBook, 3000);
 
+        // 游泳圈引用（全局，供隐藏使用）
+        let ownerSwimRingGroup = null;
+
         // 识别卫生间游泳圈（Torus.005，蓝色#1F49CC+白色#CCCCCC双色条纹）
         (function identifyBathroomItems() {
             const checkBath = setInterval(() => {
@@ -579,6 +597,7 @@
                 clearInterval(checkBath);
 
                 let swimRingMesh = null;
+                let swimRingParent = null;
                 bathroom.traverse((child) => {
                     if (child.isMesh && child.name === 'Torus.005') {
                         const mat = child.material;
@@ -587,6 +606,8 @@
                         // 蓝白条纹游泳圈：双基元 #CCCCCC + #1F49CC
                         if (hex === '#cccccc' || hex === '#1f49cc') {
                             swimRingMesh = child;
+                            swimRingParent = child.parent;
+                            ownerSwimRingGroup = child.parent; // 暴露到全局
                             // 计算世界位置
                             const wp = new THREE.Vector3();
                             child.getWorldPosition(wp);
@@ -764,8 +785,8 @@
             dogBowlGroup.traverse((child) => {
                 if (child.isMesh && child.material && child.material.color &&
                     (child.material.color.getHex() === 0xC0C0C0 || child.material.color.getHex() === 0xB0B0B0)) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.6;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.6;
                 }
             });
         }
@@ -826,8 +847,8 @@
         if (localStorage.getItem('remoteInteracted') === 'true') {
             remoteGroup.traverse((child) => {
                 if (child.isMesh && child.material.emissive) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.4;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.4;
                 }
             });
         }
@@ -836,14 +857,19 @@
         // ==================== 法斗模型 ====================
         const playerGroup = new THREE.Group();
 
-        gltfLoader.load('models/zhurenxian.glb', (gltf) => {
+        gltfLoader.load('models/xinzhuren.glb', (gltf) => {
             const model = gltf.scene;
+            console.log('👔 主人模型材质颜色（全部替换为米黄）:');
             model.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
                     child.receiveShadow = true;
                     child.material = child.material.clone();
                     child.material.wireframe = false;
+                    if (child.material.color) {
+                        console.log('  ' + child.name + ' → #' + child.material.color.getHexString());
+                        child.material.color.set('#F5E6C8');
+                    }
                 }
             });
             const box = new THREE.Box3().setFromObject(model);
@@ -926,7 +952,7 @@
             boxGroup.add(lbl);
 
             boxGroup.scale.setScalar(1.6);
-            boxGroup.position.set(0.25,0.8,0.0);
+            boxGroup.position.set(0.25,0.6,0.2);
             boxGroup.rotation.y=Math.PI/2;
             playerGroup.add(boxGroup);
             console.log('📦 精装纸箱子已添加');
@@ -991,6 +1017,19 @@
             ov.appendChild(blur); ov.appendChild(sepia); ov.appendChild(text);
             document.body.appendChild(ov);
             setTimeout(function(){ ov.style.transition='opacity 0.8s'; ov.style.opacity='0'; setTimeout(function(){ document.body.removeChild(ov); },800); },2000);
+            // 闪回结束后播放视频
+            setTimeout(function(){
+                var videoOverlay=document.createElement('div');
+                videoOverlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:#000;display:flex;justify-content:center;align-items:center;cursor:pointer;';
+                var video=document.createElement('video');
+                video.src='videos/book_video.mp4';
+                video.style.cssText='max-width:100vw;max-height:100vh;';
+                video.autoplay=true;video.controls=false;video.playsInline=true;
+                videoOverlay.appendChild(video);
+                document.body.appendChild(videoOverlay);
+                video.onended=function(){document.body.removeChild(videoOverlay);};
+                video.onclick=function(){document.body.removeChild(videoOverlay);};
+            },3000);
         }
 
         // 狗叫声已删除（等待导入音频文件）
@@ -1092,8 +1131,8 @@
             // 遥控器发光恢复
             remoteGroup.traverse((child) => {
                 if (child.isMesh && child.material && child.material.emissive !== undefined) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.4;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.4;
                 }
             });
             setTimeout(() => {
@@ -1170,8 +1209,8 @@
             collarGroup.traverse((child) => {
                 if (child.isMesh && child.material.emissive !== undefined) {
                     child.material = child.material.clone();
-                    child.material.emissive = new THREE.Color(0xFFD700);
-                    child.material.emissiveIntensity = 0.5;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFD700);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.5;
                 }
             });
         }
@@ -1183,6 +1222,157 @@
 
         // ==================== 狗绳模型 ====================
         const leashWorldPos = new THREE.Vector3(-1.24, 0.06, 0.44);
+
+        // ==================== 主人线线性解锁系统 ====================
+        const OWNER_ORDER = [
+            { id:'dogbowl',   worldPos:new THREE.Vector3(bowlPosX,0,bowlPosZ), getMesh:()=>dogBowlGroup, name:'收拾狗粮碗', hint:'那个旧的游泳圈还在卫生间吧。', type:'jump' },
+            { id:'swimring',  worldPos:swimRingWorldPos, getMesh:()=>{return ownerSwimRingGroup;}, name:'游泳圈', hint:'泳圈太大了，先去收那个玩具球吧。|那个球在哪里？', type:'flashback' },
+            { id:'toyball',   worldPos:toyBallWorldPos,  getMesh:()=>{return toyBallMesh;}, name:'收拾玩具球', hint:'那本书里好像还夹着什么东西。', type:'flashback' },
+            { id:'greenbook', worldPos:greenBookWorldPos,getMesh:()=>null, name:'翻开书', hint:'狗绳在哪里？', type:'book' },
+            { id:'leash',     worldPos:leashWorldPos,    getMesh:()=>leashGroup, name:'解开狗绳', hint:'……终于解开了。|电视机前地上是什么？', type:'jump' },
+            { id:'medical',   worldPos:null,       getMesh:()=>{return medicalGroup;}, name:'收拾病历单', hint:'唉.....多想再见看你一眼。哦对了，项圈我是不是放在衣柜里了？', type:'flashback' },
+            { id:'collar',    worldPos:collarWorldPos,   getMesh:()=>null, name:'项圈', hint:null, type:'video' },
+        ];
+        let ownerStep = parseInt(localStorage.getItem('ownerStep')||'0');
+        const ownerProgressEl = document.getElementById('owner-progress');
+        const ownerNarrativeEl = document.getElementById('owner-narrative');
+        let ownerNarrativeTimer = null;
+
+        function ownerShowNarrative(text, duration = 3000) {
+            clearTimeout(ownerNarrativeTimer);
+            ownerNarrativeEl.textContent = text;
+            ownerNarrativeEl.style.opacity = '1';
+            ownerNarrativeTimer = setTimeout(() => { ownerNarrativeEl.style.opacity = '0'; }, duration);
+        }
+
+        function ownerUpdateStep(step) {
+            ownerStep = step;
+            localStorage.setItem('ownerStep', step);
+            ownerProgressEl.textContent = '收拾进度：' + ownerStep + '/7';
+            ownerProgressEl.style.display = 'block';
+        }
+
+        function ownerHideItem(itemId) {
+            localStorage.setItem('owner_hidden_'+itemId, 'true');
+            var item = OWNER_ORDER.find(function(o){return o.id===itemId;});
+            if (item && item.getMesh) {
+                var m = item.getMesh();
+                if (m) {
+                    m.traverse(function(c){ if(c.isMesh){ c.visible = false; } });
+                    m.visible = false;
+                    // 篮球：隐藏父级中名字包含"球"的其他兄弟
+                    if (itemId === 'toyball' && m.parent) {
+                        m.parent.traverse(function(c){
+                            if (c.isMesh && c.name.indexOf('球') >= 0) { c.visible = false; }
+                        });
+                    }
+                    // 游泳圈：遍历整个场景隐藏所有 Torus.005
+                    if (itemId === 'swimring') {
+                        scene.traverse(function(c){
+                            if (c.isMesh && c.name === 'Torus.005') { c.visible = false; }
+                        });
+                    }
+                }
+            }
+        }
+
+        function ownerCheckHidden() {
+            OWNER_ORDER.forEach(function(item){
+                if (localStorage.getItem('owner_hidden_'+item.id) === 'true' && item.getMesh) {
+                    var m = item.getMesh();
+                    if (m) {
+                        m.traverse(function(c){ if(c.isMesh){ c.visible = false; } });
+                        m.visible = false;
+                        if (item.id === 'toyball' && m.parent) {
+                            m.parent.traverse(function(c){
+                                if (c.isMesh && c.name.indexOf('球') >= 0) { c.visible = false; }
+                            });
+                        }
+                        if (item.id === 'swimring') {
+                            scene.traverse(function(c){
+                                if (c.isMesh && c.name === 'Torus.005') { c.visible = false; }
+                            });
+                        }
+                    }
+                }
+            });
+        }
+
+        function ownerSavePlayerPos() {
+            var p = playerGroup.position;
+            localStorage.setItem('owner_playerX', p.x);
+            localStorage.setItem('owner_playerZ', p.z);
+        }
+        function ownerRestorePlayerPos() {
+            var x = parseFloat(localStorage.getItem('owner_playerX'));
+            var z = parseFloat(localStorage.getItem('owner_playerZ'));
+            if (!isNaN(x) && !isNaN(z)) {
+                playerGroup.position.x = x;
+                playerGroup.position.z = z;
+            }
+        }
+
+        const OWNER_ACTIONS = {
+            dogbowl:  () => { ownerHideItem('dogbowl'); ownerSavePlayerPos(); window.location.href = 'dog_food_game.html'; },
+            swimring: () => { (function(){
+                var ov2=document.createElement('div');
+                ov2.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;';
+                var b2=document.createElement('div');b2.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px);';
+                var s2=document.createElement('div');s2.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(80,140,200,0.25);';
+                var t2=document.createElement('div');t2.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(18px,2.8vw,30px);color:#FFE4B5;text-shadow:0 0 12px rgba(255,228,181,0.7),0 2px 8px rgba(0,0,0,0.7);text-align:center;';
+                t2.textContent='那个夏天它还真不怕水呢！';
+                ov2.appendChild(b2);ov2.appendChild(s2);ov2.appendChild(t2);document.body.appendChild(ov2);
+                setTimeout(function(){ov2.style.transition='opacity 0.8s';ov2.style.opacity='0';setTimeout(function(){document.body.removeChild(ov2);},800);},3000);
+            })(); },
+            toyball:  () => {
+                ownerHideItem('toyball');
+                var ov=document.createElement('div');
+                ov.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:9999;';
+                var blur=document.createElement('div');blur.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;backdrop-filter:blur(2px);';
+                var sepia=document.createElement('div');sepia.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(112,66,20,0.3);filter:sepia(0.6) saturate(0.7);';
+                var text=document.createElement('div');text.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:"Comic Sans MS","YouYuan",cursive,sans-serif;font-size:clamp(18px,2.8vw,30px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 2px 8px rgba(0,0,0,0.7);text-align:center;';
+                text.textContent='球也旧了....';
+                ov.appendChild(blur);ov.appendChild(sepia);ov.appendChild(text);document.body.appendChild(ov);
+                setTimeout(function(){ov.style.transition='opacity 0.8s';ov.style.opacity='0';setTimeout(function(){document.body.removeChild(ov);},800);},3000);
+            },
+            greenbook:() => triggerGreenBook(),
+            leash:    () => { ownerHideItem('leash');ownerSavePlayerPos();leashInteracted=true;localStorage.setItem('leashInteracted','true');localStorage.setItem('knotGameReturn','owner.html');var w=window.open('knot_game.html','_blank','width=820,height=640');if(!w)window.location.href='knot_game.html'; },
+            medical:  () => {
+                ownerHideItem('medical');
+                var imgOverlay=document.createElement('div');
+                imgOverlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:rgba(0,0,0,0.9);display:flex;justify-content:center;align-items:center;cursor:pointer;';
+                var img=document.createElement('img');
+                img.src='videos/cert.jpg';
+                img.style.cssText='max-width:90vw;max-height:90vh;border-radius:8px;box-shadow:0 0 40px rgba(255,228,181,0.3);';
+                imgOverlay.appendChild(img);
+                document.body.appendChild(imgOverlay);
+                imgOverlay.onclick=function(){document.body.removeChild(imgOverlay);};
+            },
+            collar:   () => {
+                var ov3=document.createElement('div');ov3.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;background:#000;display:flex;flex-direction:column;justify-content:center;align-items:center;';
+                var v=document.createElement('video');v.src='videos/collar_end.mp4';v.style.cssText='max-width:100vw;max-height:85vh;';v.autoplay=true;v.controls=false;v.playsInline=true;ov3.appendChild(v);
+                var skipBtn=document.createElement('button');skipBtn.textContent='跳过 ▸';skipBtn.style.cssText='margin-top:20px;padding:10px 36px;border:2px solid rgba(255,255,255,0.5);border-radius:999px;color:#fff;background:rgba(255,255,255,0.1);font:700 16px "Microsoft YaHei",sans-serif;cursor:pointer;transition:background 0.2s;';
+                skipBtn.onmouseenter=function(){skipBtn.style.background='rgba(255,255,255,0.25)';};
+                skipBtn.onmouseleave=function(){skipBtn.style.background='rgba(255,255,255,0.1)';};
+                skipBtn.onclick=function(){v.pause();v.dispatchEvent(new Event('ended'));};
+                ov3.appendChild(skipBtn);
+                document.body.appendChild(ov3);
+                v.onended=function(){
+                    document.body.removeChild(ov3);
+                    // 显示结尾页面
+                    var es=document.createElement('section');es.id='end-screen';
+                    es.innerHTML='<div class="end-content"><h1 class="end-title">谢谢你的陪伴</h1><p class="end-subtitle">那些一起走过的日子，永远不会被忘记。<br>小八，再见。</p><p class="end-thanks">点击任意位置结束</p></div>';
+                    document.body.appendChild(es);
+                    es.addEventListener('click',function(){
+                        es.innerHTML='<div class="end-content"><h1 class="end-title">感谢游玩</h1><p class="end-subtitle">「小八的家」</p><button id="end-restart-btn" type="button" style="margin-top:30px;padding:14px 40px;border:2px solid rgba(255,236,167,0.8);border-radius:999px;color:#5a2b0b;background:linear-gradient(#ffd96a,#ffb817);font:700 20px \"Microsoft YaHei\",sans-serif;cursor:pointer;">重新开始</button></div>';
+                        document.getElementById('end-restart-btn').addEventListener('click',function(){
+                            localStorage.clear();sessionStorage.clear();window.location.href='index.html';
+                        });
+                    });
+                };
+                // 禁用点击关闭，只能等视频播完
+            },
+        };
         const leashGroup = new THREE.Group();
 
         const Y = 0.01;
@@ -1268,7 +1458,7 @@
         scene.add(leashGroup);
 
         // ==================== 病历 ====================
-        var medicalPos = new THREE.Vector3(2.66, 0.003, -2.74);
+        let medicalPos = new THREE.Vector3(2.66, 0.003, -2.74);
         var medicalGroup = new THREE.Group();
         var medCanvas = document.createElement('canvas');
         medCanvas.width = 256; medCanvas.height = 358;
@@ -1338,8 +1528,8 @@
         if (medicalRecordInteracted) {
             medGlow.intensity = 0.8;
             paper.material = paper.material.clone();
-            paper.material.emissive = new THREE.Color(0xFFD700);
-            paper.material.emissiveIntensity = 0.3;
+            // 发光已禁用: paper.material.emissive = new THREE.Color(0xFFD700);
+            // 发光已禁用: paper.material.emissiveIntensity = 0.3;
         }
 
         function triggerMedicalFlashback() {
@@ -1347,8 +1537,8 @@
             medicalRecordInteracted = true;
             localStorage.setItem('medicalRecordInteracted', 'true');
             paper.material = paper.material.clone();
-            paper.material.emissive = new THREE.Color(0xFFD700);
-            paper.material.emissiveIntensity = 0.3;
+            // 发光已禁用: paper.material.emissive = new THREE.Color(0xFFD700);
+            // 发光已禁用: paper.material.emissiveIntensity = 0.3;
             medGlow.intensity = 0.8;
 
             var ov = document.createElement('div');
@@ -1369,6 +1559,9 @@
         // 狗绳碰撞检测
         addCollider(leashWorldPos.x, leashWorldPos.z, 0.20, 0.15, true, 0.12, leashWorldPos.y);
 
+        // 恢复隐藏状态（需要等模型加载完，延迟执行）
+        setTimeout(function(){ ownerCheckHidden(); }, 1500);
+
         // 狗绳交互状态
         let leashInteracted = localStorage.getItem('leashInteracted') === 'true';
 
@@ -1376,8 +1569,8 @@
         if (leashInteracted) {
             leashGroup.traverse((child) => {
                 if (child.isMesh && child.material.emissive) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.5;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.5;
                 }
             });
         }
@@ -1392,8 +1585,8 @@
             leashGroup.traverse((child) => {
                 if (child.isMesh && child.material.emissive !== undefined) {
                     child.material = child.material.clone();
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.5;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.5;
                 }
             });
 
@@ -1441,8 +1634,8 @@
                     if (child.material.color &&
                         (child.material.color.getHex() === 0xC0C0C0 ||
                          child.material.color.getHex() === 0xB0B0B0)) {
-                        child.material.emissive = new THREE.Color(0xFFE4B5);
-                        child.material.emissiveIntensity = 0.6;
+                        // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                        // 发光已禁用: child.material.emissiveIntensity = 0.6;
                     }
                 }
             });
@@ -1473,8 +1666,8 @@
             // 球体发光变色
             if (toyBallMesh) {
                 toyBallMesh.material = toyBallMesh.material.clone();
-                toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
-                toyBallMesh.material.emissiveIntensity = 0.5;
+                // 发光已禁用: toyBallMesh.material.emissive = new THREE.Color(0xFFD700);
+                // 发光已禁用: toyBallMesh.material.emissiveIntensity = 0.5;
             }
 
             // 弹跳动画：向上跳起0.05再落下
@@ -1529,8 +1722,8 @@
             // 遥控器发光
             remoteGroup.traverse((child) => {
                 if (child.isMesh && child.material.emissive) {
-                    child.material.emissive = new THREE.Color(0xFFE4B5);
-                    child.material.emissiveIntensity = 0.4;
+                    // 发光已禁用: child.material.emissive = new THREE.Color(0xFFE4B5);
+                    // 发光已禁用: child.material.emissiveIntensity = 0.4;
                 }
             });
 
@@ -1629,8 +1822,8 @@
                 collarGroup.traverse((child) => {
                     if (child.isMesh && child.material.emissive !== undefined) {
                         child.material = child.material.clone();
-                        child.material.emissive = new THREE.Color(0xFFD700);
-                        child.material.emissiveIntensity = 0.5;
+                        // 发光已禁用: child.material.emissive = new THREE.Color(0xFFD700);
+                        // 发光已禁用: child.material.emissiveIntensity = 0.5;
                     }
                 });
             }
@@ -2006,12 +2199,12 @@
                     if (matName && (matName === 'gangqing' || matName === 'gangqing2' || matName.startsWith('gangqing'))) {
                         if (success) {
                             child.material = child.material.clone();
-                            child.material.emissive = new THREE.Color(0xFFD700);
-                            child.material.emissiveIntensity = 0.8;
+                            // 发光已禁用: child.material.emissive = new THREE.Color(0xFFD700);
+                            // 发光已禁用: child.material.emissiveIntensity = 0.8;
                         } else {
                             child.material = child.material.clone();
-                            child.material.emissive = new THREE.Color(0x222222);
-                            child.material.emissiveIntensity = 0.1;
+                            // 发光已禁用: child.material.emissive = new THREE.Color(0x222222);
+                            // 发光已禁用: child.material.emissiveIntensity = 0.1;
                         }
                     }
                 }
@@ -2277,100 +2470,47 @@
             const playerPos = playerGroup.position;
             let closestDist = Infinity, closestItem = null;
 
-            // 检查病历
-            var medDist = playerPos.distanceTo(medicalPos);
-            if (medDist < 0.8 && medDist < closestDist) {
-                closestDist = medDist;
-                closestItem = {
-                    id: 'medical',
-                    name: '收拾病历单',
-                    action: function() { showFeedback('收拾病历单'); }
-                };
-            }
-
-            // 检查狗绳
-            if (!leashInteracted) {
-                const leashDist = playerPos.distanceTo(leashWorldPos);
-                if (leashDist < 0.8 && leashDist < closestDist) {
-                    closestDist = leashDist;
-                    closestItem = {
-                        id: 'leash',
-                        name: '解开狗绳',
-                        action: () => triggerLeashFlashback()
-                    };
-                }
-            }
-
-            // 检查游泳圈（卫生间）
-            const swimRingDist = playerPos.distanceTo(swimRingWorldPos);
-            if (swimRingDist < 1.0 && swimRingDist < closestDist) {
-                closestDist = swimRingDist;
-                closestItem = {
-                    id: 'swimring',
-                    name: '游泳圈',
-                    action: () => { window.location.href = 'swim_game.html'; }
-                };
-            }
-
-            // 检查项圈（最高优先级，Y轴范围加大：仅XZ平面距离）
-            if (!collarInteracted) {
-                const dx = playerPos.x - collarWorldPos.x;
-                const dz = playerPos.z - collarWorldPos.z;
-                const collarDist = Math.sqrt(dx * dx + dz * dz);
-                if (collarDist < 0.8) {
-                    closestDist = collarDist;
-                    closestItem = {
-                        id: 'collar',
-                        name: '项圈',
-                        action: () => triggerCollarInteraction()
-                    };
-                }
-            }
-
-            // 检查玩具球
-            const ballDist = playerPos.distanceTo(toyBallWorldPos);
-            if (ballDist < 0.6 && ballDist < closestDist) {
-                closestDist = ballDist;
-                closestItem = {
-                    id: 'toyball',
-                    name: '收拾玩具球',
-                    action: () => showFeedback('收拾玩具球')
-                };
-            }
-
-            // 检查绿色封面书
-            if (!greenBookInteracted) {
-                const bookDist = playerPos.distanceTo(greenBookWorldPos);
-                if (bookDist < 1.0 && bookDist < closestDist) {
-                    closestDist = bookDist;
-                    closestItem = {
-                        id: 'greenbook',
-                        name: '翻开书',
-                        action: () => triggerGreenBook()
-                    };
-                }
-            }
-
-            // 检查狗粮碗
-            if (!dogBowlInteracted) {
-                const bowlDist = playerPos.distanceTo(dogBowlWorldPos);
-                if (bowlDist < 1.0 && bowlDist < closestDist) {
-                    closestDist = bowlDist;
-                    closestItem = {
-                        id: 'dogbowl',
-                        name: '收拾狗粮碗',
-                        action: () => {
-                            dogBowlInteracted = true;
-                            localStorage.setItem('dogBowlInteracted', 'true');
-                            var w = window.open('dog_food_game.html','_blank','width=820,height=640');
-                            if (!w) window.location.href = 'dog_food_game.html';
-                        }
-                    };
+            if (ownerStep < OWNER_ORDER.length) {
+                const item = OWNER_ORDER[ownerStep];
+                const wp = item.id === 'medical' ? medicalPos : item.worldPos;
+                if (wp) {
+                    const d = playerPos.distanceTo(wp);
+                    const range = 1.0;
+                    if (d < range && d < closestDist) {
+                        closestDist = d;
+                        closestItem = {
+                            id: item.id,
+                            name: item.name,
+                            action: () => {
+                                // 清除上一个提示词
+                                ownerNarrativeEl.style.opacity = '0';
+                                clearTimeout(ownerNarrativeTimer);
+                                // 保存进度
+                                ownerUpdateStep(ownerStep + 1);
+                                // 执行动作
+                                if (OWNER_ACTIONS[item.id]) OWNER_ACTIONS[item.id]();
+                                // 提示词：闪回类5秒，跳转类2秒
+                                if (item.hint) {
+                                    const hintText = item.hint;
+                                    const hintDelay = (item.type === 'jump') ? 2000 : 5000;
+                                    setTimeout(() => {
+                                        if (hintText.includes('|')) {
+                                            const parts = hintText.split('|');
+                                            ownerShowNarrative(parts[0], 2000);
+                                            setTimeout(() => ownerShowNarrative(parts[1], 5000), 3000);
+                                        } else {
+                                            ownerShowNarrative(hintText, 5000);
+                                        }
+                                    }, hintDelay);
+                                }
+                            }
+                        };
+                    }
                 }
             }
 
             if (closestItem) {
-                hintEl.textContent = `按 E 键 ${closestItem.name}`;
+                hintEl.textContent = '按 E 键 ' + closestItem.name;
                 hintEl.classList.add('visible');
                 return closestItem;
             } else {
@@ -2637,11 +2777,56 @@
         // ==================== 动画循环 ====================
         const clock = new THREE.Clock();
         let walkCycle = 0;
+        let ownerGameStartTime = null;
+        let ownerOpeningShown = false;
+        let ownerProgressRestored = false;
 
         function animate() {
             requestAnimationFrame(animate);
 
             const dt = Math.min(clock.getDelta(), 0.1);
+
+            // 主人线开局提示
+            if (!ownerGameStartTime) ownerGameStartTime = performance.now() / 1000;
+            const oelapsed = performance.now() / 1000 - ownerGameStartTime;
+
+            // 恢复进度（从子游戏返回时）
+            if (!ownerProgressRestored && ownerStep > 0 && oelapsed > 1) {
+                ownerProgressRestored = true;
+                ownerRestorePlayerPos();
+                ownerProgressEl.textContent = '收拾进度：' + ownerStep + '/7';
+                ownerProgressEl.style.display = 'block';
+                const lastDone = OWNER_ORDER[ownerStep - 1];
+                if (lastDone && lastDone.hint && lastDone.type === 'jump') {
+                    ownerNarrativeEl.style.opacity = '0';
+                    clearTimeout(ownerNarrativeTimer);
+                    const hintText = lastDone.hint;
+                    setTimeout(() => {
+                        if (hintText.includes('|')) {
+                            const parts = hintText.split('|');
+                            ownerShowNarrative(parts[0], 2000);
+                            setTimeout(() => ownerShowNarrative(parts[1], 5000), 3000);
+                        } else {
+                            ownerShowNarrative(hintText, 5000);
+                        }
+                    }, 2000);
+                }
+            }
+
+            // 开局提示（仅首次无进度时）
+            if (!ownerOpeningShown && ownerStep === 0) {
+                if (oelapsed < 5) {
+                    ownerNarrativeEl.style.opacity = '1';
+                    ownerNarrativeEl.textContent = '今天该收拾小八的东西了。从狗盆开始吧。它之前总是吃的到处都是.......';
+                }
+                if (oelapsed > 5) {
+                    ownerNarrativeEl.style.opacity = '0';
+                }
+                if (oelapsed > 5.5) {
+                    ownerOpeningShown = true;
+                    ownerUpdateStep(0);
+                }
+            }
 
             if (remoteSeqLocked) {
                 // 序列控制期间跳过手动移动

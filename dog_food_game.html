@@ -8,10 +8,13 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#1a0f0a;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:"Comic Sans MS","YouYuan",cursive,sans-serif}
 canvas{display:block;cursor:pointer;border-radius:12px;box-shadow:0 0 40px rgba(0,0,0,0.6)}
+#skipBtn{position:absolute;bottom:10px;right:10px;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);border:1px solid rgba(255,255,255,0.2);padding:4px 12px;border-radius:15px;font-size:11px;cursor:pointer;z-index:10;font-family:inherit}
+#skipBtn:hover{background:rgba(255,255,255,0.25);color:#fff}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<button id="skipBtn" onclick="skipGame()">跳过 ⏭</button>
 <script>
 (function(){
 const c=document.getElementById('c');
@@ -180,12 +183,18 @@ c.addEventListener('touchstart',function(e){
 },{passive:false});
 c.addEventListener('touchend',function(){doLaunch();});
 
-// 结局点击
-function goBack(){
-    window.location.href='owner.html';
-}
-document.addEventListener('click',function(e){if(gameState!=='playing')goBack();});
-document.addEventListener('touchend',function(e){if(gameState!=='playing')goBack();});
+// 跳过
+window.skipGame=function(){successCount=12;gameState='win';endMessage='……至少把它们收好了。';};
+
+// 结局点击：胜利回房间，失败重来
+document.addEventListener('click',function(e){
+    if(gameState==='win')window.location.href='owner.html';
+    if(gameState==='lose')location.reload();
+});
+document.addEventListener('touchend',function(e){
+    if(gameState==='win')window.location.href='owner.html';
+    if(gameState==='lose')location.reload();
+});
 
 // ── 更新 ──
 function update(dt){
@@ -601,7 +610,7 @@ function draw(){
         ctx.fillText(gameState==='win'?'……至少把它们收好了。':'……还是少了几粒。',W/2,H/2-10);
         ctx.fillStyle='#DDD';
         ctx.font='14px "Comic Sans MS","YouYuan",cursive,sans-serif';
-        ctx.fillText('按任意位置返回',W/2,H/2+25);
+        ctx.fillText(gameState==='win'?'按任意位置返回':'按任意位置重试',W/2,H/2+25);
         ctx.textAlign='left';
     }
 
