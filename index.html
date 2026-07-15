@@ -190,6 +190,10 @@
         <div id="flashback-remote-text" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Comic Sans MS','YouYuan',cursive,sans-serif;font-size:clamp(16px,2.8vw,28px);color:#FFE4B5;text-shadow:0 0 10px rgba(255,228,181,0.8),0 0 30px rgba(255,180,80,0.5),0 2px 8px rgba(0,0,0,0.7);text-align:center;line-height:1.6;max-width:80vw;opacity:0;transition:opacity 1s ease-in-out;white-space:pre-line;letter-spacing:0.05em;">以前主人抱着我一起看电视…<br>现在他的眼睛不再看屏幕了。</div>
     </div>
 
+    <!-- 音频元素 -->
+    <audio id="play-piano-audio" src="play_piano.mp3" preload="auto"></audio>
+    <audio id="bulldog-bgm-audio" src="bulldog.mp3" preload="auto" loop></audio>
+
     <!-- 钢琴节奏小游戏叠加层 -->
     <div id="piano-game-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;z-index:10000;display:none;background:rgba(0,0,0,0.85);">
         <canvas id="piano-canvas"></canvas>
@@ -259,6 +263,12 @@
                     startScreen.classList.add('is-hidden');
                     setTimeout(() => { startScreen.remove(); }, 700);
                     if (audioCtx.state === 'suspended') audioCtx.resume();
+                    // 播放小狗界面BGM
+                    const bulldogBgm = document.getElementById('bulldog-bgm-audio');
+                    if (bulldogBgm) {
+                        bulldogBgm.volume = 0.5;
+                        bulldogBgm.play().catch(() => {});
+                    }
                 });
             }
         }
@@ -2482,6 +2492,9 @@
         // 触发钢琴游戏
         function triggerPianoGame() {
             if (pianoGameActive) return;
+            // 停止钢琴BGM
+            const pianoAudio = document.getElementById('play-piano-audio');
+            if (pianoAudio) { pianoAudio.pause(); pianoAudio.currentTime = 0; }
             stopTwinkleTwinkle();
             narrativeEl.style.opacity = '0';
             // 如果之前已经成功玩过，仍然可以再次进入
@@ -2516,7 +2529,7 @@
                                     if (!item.id.match(/swimring|toyball|collar/)) {
                                         const done = UNLOCK_ORDER[unlockStep - 1];
                                         if (done && done.hint) {
-                                            const isPiano = done.hint === '脑海中出现了熟悉的旋律';
+                                            const isPiano = done.hint && done.hint.includes('脑海中出现了熟悉的旋律');
                                             setTimeout(function(){
                                                 if (isPiano) playTwinkleTwinkle();
                                                 showNarrative(done.hint, isPiano ? 15000 : 5000);
@@ -2884,6 +2897,12 @@
             });
         } else {
             gameStarted = true;
+            // 从子游戏返回时自动恢复BGM
+            const bulldogBgm = document.getElementById('bulldog-bgm-audio');
+            if (bulldogBgm && bulldogBgm.paused) {
+                bulldogBgm.volume = 0.5;
+                bulldogBgm.play().catch(() => {});
+            }
         }
 
         function animate() {
@@ -2907,7 +2926,15 @@
                 if (lastId === 'swimring' || lastId === 'toyball') {
                     const lastDone = UNLOCK_ORDER[unlockStep - 1];
                     if (lastDone && lastDone.hint) {
-                        const isPiano = lastDone.hint === '脑海中出现了熟悉的旋律';
+                        const isPiano = lastDone.hint && lastDone.hint.includes('脑海中出现了熟悉的旋律');
+                        if (isPiano) {
+                            // 播放钢琴BGM（篮球结束到钢琴游戏开始前）
+                            const pianoAudio = document.getElementById('play-piano-audio');
+                            if (pianoAudio) {
+                                pianoAudio.currentTime = 0;
+                                pianoAudio.play().catch(() => {});
+                            }
+                        }
                         setTimeout(function(){
                             if (isPiano) playTwinkleTwinkle();
                             showNarrative(lastDone.hint, isPiano ? 15000 : 4000);

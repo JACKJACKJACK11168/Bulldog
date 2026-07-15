@@ -65,6 +65,9 @@
         <div id="hint">WASD 控制小八移动</div>
     </div>
 
+    <audio id="play-ball-audio" src="play_ball.mp3" preload="auto"></audio>
+    <audio id="play-piano-audio" src="play_piano.mp3" preload="auto"></audio>
+
     <script type="importmap">
         {
             "imports": {
@@ -716,6 +719,10 @@
                 ballGroup.userData.isHeldByDog = true;
                 showSpeech('接得好！快传回来！', 2500);
 
+                // 播放捡球音效
+                const ballAudio = document.getElementById('play-ball-audio');
+                if (ballAudio) { ballAudio.currentTime = 0; ballAudio.play().catch(() => {}); }
+
                 // 球粘在狗身上
                 updateBallPosition();
             }
@@ -756,6 +763,10 @@
                     ballData.isHeldByOwner = true;
                     ballGroup.position.copy(ownerHandPos);
 
+                    // 停止捡球音效（球已送回主人手中）
+                    const ballAudio = document.getElementById('play-ball-audio');
+                    if (ballAudio) { ballAudio.pause(); ballAudio.currentTime = 0; }
+
                     gameState.score++;
                     updateScore();
 
@@ -776,6 +787,14 @@
             gameState.canInteract = false;
             scoreBox.classList.add('success');
             showSpeech('太棒了小八！你做到了！', 5000);
+
+            // 播放钢琴BGM
+            const pianoAudio = document.getElementById('play-piano-audio');
+            if (pianoAudio) {
+                pianoAudio.volume = 0.5;
+                pianoAudio.currentTime = 0;
+                pianoAudio.play().catch(() => {});
+            }
 
             // 庆祝动画
             const startTime = performance.now();
@@ -808,6 +827,10 @@
             hideSpeech();
             ballGroup.userData.isHeldByOwner = true;
             ballGroup.userData.isFlying = false;
+
+            // 停止捡球音效
+            const ballAudio = document.getElementById('play-ball-audio');
+            if (ballAudio) { ballAudio.pause(); ballAudio.currentTime = 0; }
 
             const ownerHandPos = new THREE.Vector3();
             rightHand.getWorldPosition(ownerHandPos);

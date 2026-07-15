@@ -145,6 +145,8 @@
     </style>
 </head>
 <body>
+    <audio id="owner-bgm-audio" src="owner.mp3" preload="auto" loop></audio>
+    <audio id="light-bgm-audio" src="light.mp3" preload="auto"></audio>
     <div id="info">👤 小八的家 | 阴天 · 第二章</div>
     <div id="interact-hint">按 <kbd>E</kbd> 互动</div>
     <div id="action-feedback"></div>
@@ -233,6 +235,79 @@
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         let lastFootstepTime = 0;
         const footstepInterval = 0.35;
+
+        // ==================== 主人界面BGM ====================
+        const ownerBgm = document.getElementById('owner-bgm-audio');
+        let ownerBgmPlaying = false;
+        let ownerBgmStarted = false;
+
+        function startOwnerBgm() {
+            if (!ownerBgm || ownerBgmStarted) return;
+            ownerBgm.volume = 0.5;
+            ownerBgm.loop = true;
+            ownerBgm.play().then(() => {
+                ownerBgmPlaying = true;
+                ownerBgmStarted = true;
+            }).catch(() => {});
+        }
+
+        function pauseOwnerBgm() {
+            if (!ownerBgm || !ownerBgmPlaying) return;
+            ownerBgm.pause();
+            ownerBgmPlaying = false;
+        }
+
+        function resumeOwnerBgm() {
+            if (!ownerBgm || ownerBgmPlaying || !ownerBgmStarted) return;
+            // 检查是否还有视频在播放
+            const videos = document.querySelectorAll('video');
+            let anyPlaying = false;
+            videos.forEach(v => { if (!v.paused) anyPlaying = true; });
+            if (anyPlaying) return;
+            ownerBgm.play().then(() => {
+                ownerBgmPlaying = true;
+            }).catch(() => {});
+        }
+
+        // 首次交互时启动BGM
+        function tryStartBgm() {
+            if (!ownerBgmStarted) startOwnerBgm();
+        }
+        document.addEventListener('click', tryStartBgm, { once: true });
+        document.addEventListener('keydown', tryStartBgm, { once: true });
+
+        // 监听视频元素的新增和移除，自动暂停/恢复BGM
+        const bgmObserver = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const node of m.addedNodes) {
+                    if (node.nodeName === 'VIDEO') {
+                        pauseOwnerBgm();
+                        node.addEventListener('ended', () => { resumeOwnerBgm(); }, { once: true });
+                        node.addEventListener('pause', () => {
+                            // 视频暂停时不恢复，等移除或结束
+                        });
+                    } else if (node.querySelector) {
+                        const videos = node.querySelectorAll('video');
+                        videos.forEach(v => {
+                            pauseOwnerBgm();
+                            v.addEventListener('ended', () => { resumeOwnerBgm(); }, { once: true });
+                        });
+                    }
+                }
+                for (const node of m.removedNodes) {
+                    if (node.nodeName === 'VIDEO' || (node.querySelector && node.querySelector('video'))) {
+                        // 延迟检查，确保DOM更新完成
+                        setTimeout(() => {
+                            const remainingVideos = document.querySelectorAll('video');
+                            let anyPlaying = false;
+                            remainingVideos.forEach(v => { if (!v.paused) anyPlaying = true; });
+                            if (!anyPlaying) resumeOwnerBgm();
+                        }, 100);
+                    }
+                }
+            }
+        });
+        bgmObserver.observe(document.body, { childList: true, subtree: true });
 
         function playFootstep(volume = 1.5, freq = 400) {
             const now = audioCtx.currentTime;
@@ -1428,6 +1503,13 @@
                 ownerHideItem('collar');
                 collarInteracted = true;
                 localStorage.setItem('collarInteracted', 'true');
+                // 永久停止主人BGM（项圈CG是结局流程，不应恢复BGM）
+                if (ownerBgm && ownerBgmPlaying) {
+                    ownerBgm.pause();
+                    ownerBgm.currentTime = 0;
+                    ownerBgmPlaying = false;
+                    ownerBgmStarted = false;
+                }
                 // 先显示第一句话
                 ownerShowNarrative('这是最后一样了，往后就再也没有你的痕迹了...', 3000);
                 // 3.5秒后显示第二句话
@@ -1446,6 +1528,12 @@
                     document.body.appendChild(ov3);
                     v.onended=function(){
                         document.body.removeChild(ov3);
+                        // 播放light.mp3
+                        const lightBgm = document.getElementById('light-bgm-audio');
+                        if (lightBgm) {
+                            lightBgm.volume = 0.6;
+                            lightBgm.play().catch(() => {});
+                        }
                         // 显示"谢谢你的陪伴"页面，BGM标注放这里
                         var es=document.createElement('section');es.id='end-screen';
                         es.innerHTML='<div class="end-content"><h1 class="end-title">谢谢你的陪伴</h1><p class="end-subtitle">那些一起走过的日子，永远不会被忘记。<br>小八，再见。</p><p style="color:rgba(255,236,167,0.6);font-size:16px;font-style:italic;margin-top:10px;">BGM：《看见》</p></div>';
@@ -1457,7 +1545,7 @@
                             setTimeout(function(){
                                 var caidanDiv=document.createElement('div');
                                 caidanDiv.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:40000;background:#000;display:flex;flex-direction:column;justify-content:center;align-items:center;';
-                                var cv=document.createElement('video');cv.src='videos/caidan.mp4';cv.style.cssText='max-width:100vw;max-height:100vh;';cv.autoplay=true;cv.controls=false;cv.playsInline=true;
+                                var cv=document.createElement('video');cv.src='videos/caidan.mp4';cv.style.cssText='max-width:100vw;max-height:100vh;';cv.autoplay=true;cv.controls=false;cv.playsInline=true;cv.muted=true;
                                 caidanDiv.appendChild(cv);
                                 document.body.appendChild(caidanDiv);
                                 es.style.background='';
@@ -1901,6 +1989,9 @@
             collarVideoHint.style.display = 'none';
             collarVideoOverlay.style.display = 'block';
 
+            // 暂停BGM
+            pauseOwnerBgm();
+
             // 尝试自动播放
             collarVideoElement.play().catch(() => {
                 // 自动播放被阻止，显示提示
@@ -1919,6 +2010,9 @@
             collarVideoHint.innerHTML = '视频占位区域<br><span style="font-size:13px;">替换 collar_video_a.mp4 或 collar_video_b.mp4 即可播放</span>';
             collarVideoOverlay.style.display = 'none';
             currentVideoType = null;
+
+            // 恢复BGM
+            resumeOwnerBgm();
 
             // 标记已互动
             if (!collarInteracted) {
@@ -1946,10 +2040,12 @@
         collarVideoPlayBtn.addEventListener('click', () => {
             if (!currentVideoType) return;
             if (collarVideoElement.paused) {
+                pauseOwnerBgm();
                 collarVideoElement.play();
                 collarVideoPlayBtn.textContent = '⏸ 暂停';
             } else {
                 collarVideoElement.pause();
+                resumeOwnerBgm();
                 collarVideoPlayBtn.textContent = '▶ 播放';
             }
         });
